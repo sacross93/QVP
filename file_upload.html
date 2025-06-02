@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일 업로드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
+    <style>
+        .btn {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+        .tab-active {
+            background-color: #000;
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.15);
+        }
+        .tab-inactive {
+            background-color: #F7F9FB;
+            color: black;
+        }
+        
+        .upload-zone {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(67, 83, 255, 0.03) 0%, rgba(67, 83, 255, 0.08) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .upload-zone:hover::before {
+            opacity: 1;
+        }
+        
+        .upload-zone:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(67, 83, 255, 0.15);
+            border-color: #4353FF;
+        }
+        
+        .upload-zone.drag-over {
+            border-color: #4353FF;
+            background: linear-gradient(135deg, rgba(67, 83, 255, 0.08) 0%, rgba(67, 83, 255, 0.12) 100%);
+            transform: scale(1.02);
+        }
+        
+        .upload-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .browse-btn {
+            background: linear-gradient(135deg, #4353FF 0%, #5865FF 100%);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 14px rgba(67, 83, 255, 0.25);
+        }
+        
+        .browse-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(67, 83, 255, 0.4);
+            background: linear-gradient(135deg, #3f46ff 0%, #4f46e5 100%);
+        }
+        
+        .upload-icon {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        .panel-container {
+            background: white;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .menu-btn, .settings-btn {
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        .menu-btn:hover, .settings-btn:hover {
+            background: rgba(247, 249, 251, 1);
+            transform: scale(1.05);
+        }
+        
+        .file-indicator {
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+        
+        .upload-zone:hover .file-indicator {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-blue-50 p-8 min-h-screen">
+    <div class="flex flex-col items-center gap-8 w-full max-w-[1255px] mx-auto">
+        <!-- 토글 버튼 -->
+        <div class="flex items-start p-1.5 gap-1 w-[220px] h-10 bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-full border border-gray-100">
+            <button 
+                id="uploadTab"
+                class="btn flex justify-center items-center py-2 px-6 gap-2.5 flex-1 h-7 rounded-full tab-active"
+                onclick="switchTab('upload')"
+            >
+                <span class="text-xs font-semibold">Upload</span>
+            </button>
+            <button 
+                id="recentTab"
+                class="btn flex justify-center items-center py-2 px-6 gap-2.5 flex-1 h-7 rounded-full tab-inactive"
+                onclick="switchTab('recent')"
+            >
+                <span class="text-xs font-semibold">Recent</span>
+            </button>
+        </div>
+
+        <!-- 업로드 패널 -->
+        <div id="uploadPanel" class="panel w-[420px] h-[440px] relative">
+            <div class="absolute inset-0 bg-white rounded-3xl panel-container">
+                <!-- 메뉴 버튼 -->
+                <div class="absolute w-10 h-10 right-6 top-6 border border-gray-100 rounded-xl flex items-center justify-center menu-btn cursor-pointer">
+                    <i data-lucide="more-horizontal" class="w-4 h-4 text-gray-600"></i>
+                </div>
+
+                <!-- 헤더 -->
+                <div class="absolute left-6 top-6">
+                    <h3 class="text-lg font-semibold text-gray-800">파일 업로드</h3>
+                    <p class="text-sm text-gray-500 mt-1">드래그하거나 클릭하여 파일을 선택하세요</p>
+                </div>
+
+                <!-- 구분선 -->
+                <div class="absolute h-px left-6 right-6 top-[88px] bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+
+                <!-- 드래그 영역 -->
+                <div class="absolute left-6 right-6 top-[108px] bottom-6">
+                    <div class="upload-zone w-full h-full border-2 border-dashed border-gray-250 rounded-2xl cursor-pointer flex flex-col items-center justify-center"
+                         onclick="document.getElementById('fileInput').click()">
+                        <div class="upload-content flex flex-col items-center gap-6">
+                            <!-- 업로드 아이콘 -->
+                            <div class="upload-icon relative">
+                                <div class="w-16 h-16 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl flex items-center justify-center">
+                                    <i data-lucide="cloud-upload" class="w-8 h-8 text-indigo-600"></i>
+                                </div>
+                                <div class="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                                    <i data-lucide="plus" class="w-3 h-3 text-white"></i>
+                                </div>
+                            </div>
+                            
+                            <!-- 텍스트 -->
+                            <div class="text-center space-y-2">
+                                <p class="text-gray-700 font-medium">파일을 여기에 드롭하세요</p>
+                                <p class="text-sm text-gray-500">또는</p>
+                            </div>
+                            
+                            <!-- Browse 버튼 -->
+                            <button class="browse-btn px-8 py-3 rounded-xl text-white font-medium text-sm flex items-center gap-2 hover:gap-3">
+                                <i data-lucide="folder-open" class="w-4 h-4"></i>
+                                <span>파일 선택</span>
+                            </button>
+                            
+                            <!-- 파일 형식 안내 -->
+                            <div class="file-indicator text-xs text-gray-400 flex items-center gap-2 mt-4">
+                                <i data-lucide="info" class="w-3 h-3"></i>
+                                <span>PNG, JPG, PDF 파일 지원 (최대 10MB)</span>
+                            </div>
+                        </div>
+                        
+                        <input type="file" id="fileInput" multiple accept=".png,.jpg,.jpeg,.pdf" style="display: none;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 최근 파일 패널 -->
+        <div id="recentPanel" class="panel w-[804px] h-[496px] relative shadow-sm mx-auto hidden">
+            <div class="absolute inset-0 bg-white rounded-3xl panel-container">
+                <!-- 설정 버튼 -->
+                <div class="absolute w-10 h-10 right-6 top-6 border border-gray-100 rounded-xl flex items-center justify-center settings-btn cursor-pointer">
+                    <i data-lucide="settings-2" class="w-4 h-4 text-gray-600"></i>
+                </div>
+
+                <!-- 헤더 -->
+                <div class="absolute left-6 top-6">
+                    <h3 class="text-lg font-semibold text-gray-800">최근 파일</h3>
+                    <p class="text-sm text-gray-500 mt-1">최근에 업로드한 파일들</p>
+                </div>
+
+                <!-- 구분선 -->
+                <div class="absolute h-px left-6 right-6 top-[88px] bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+
+                <!-- 업로드 목록 -->
+                <div class="absolute flex flex-col items-center gap-3 left-6 right-6 top-[108px] h-[303px] overflow-y-auto">
+                    <!-- 파일 아이템들 -->
+                    <div class="upload-item w-full">
+                        <div class="flex flex-row items-center gap-3.5 w-full p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                            <div class="flex flex-row items-start gap-4 flex-grow">
+                                <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="file-text" class="w-5 h-5 text-red-600"></i>
+                                </div>
+                                <div class="flex flex-col items-start gap-1 flex-grow">
+                                    <div class="text-sm font-medium text-gray-800 w-full">user-journey-01.pdf</div>
+                                    <div class="text-xs text-gray-500 w-full">2분 전</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-row items-center gap-3">
+                                <div class="flex flex-row justify-center items-center px-3 py-1.5 h-6 bg-gray-100 rounded-lg">
+                                    <span class="text-xs font-medium text-gray-600">604KB</span>
+                                </div>
+                                <div class="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 cursor-pointer">
+                                    <i data-lucide="more-vertical" class="w-4 h-4 text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="upload-item w-full">
+                        <div class="flex flex-row items-center gap-3.5 w-full p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                            <div class="flex flex-row items-start gap-4 flex-grow">
+                                <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="folder" class="w-5 h-5 text-blue-600"></i>
+                                </div>
+                                <div class="flex flex-col items-start gap-1 flex-grow">
+                                    <div class="text-sm font-medium text-gray-800 w-full">project-assets</div>
+                                    <div class="text-xs text-gray-500 w-full">5분 전</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-row items-center gap-3">
+                                <div class="flex flex-row justify-center items-center px-3 py-1.5 h-6 bg-gray-100 rounded-lg">
+                                    <span class="text-xs font-medium text-gray-600">1.2MB</span>
+                                </div>
+                                <div class="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 cursor-pointer">
+                                    <i data-lucide="more-vertical" class="w-4 h-4 text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="upload-item w-full">
+                        <div class="flex flex-row items-center gap-3.5 w-full p-3 rounded-xl hover:bg-red-50 transition-colors border border-red-100">
+                            <div class="flex flex-row items-start gap-4 flex-grow">
+                                <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="file-text" class="w-5 h-5 text-red-600"></i>
+                                </div>
+                                <div class="flex flex-col items-start gap-1 flex-grow">
+                                    <div class="text-sm font-medium text-gray-800 w-full">quarterly-report.docx</div>
+                                    <div class="text-xs text-red-500 w-full">업로드 실패 • 15분 전</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-row items-center gap-3">
+                                <button class="flex flex-row justify-center items-center px-3 py-1.5 h-6 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                                    <span class="text-xs font-medium">재시도</span>
+                                </button>
+                                <div class="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-100 cursor-pointer">
+                                    <i data-lucide="more-vertical" class="w-4 h-4 text-red-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="upload-item w-full">
+                        <div class="flex flex-row items-center gap-3.5 w-full p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                            <div class="flex flex-row items-start gap-4 flex-grow">
+                                <div class="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                                    <i data-lucide="image" class="w-5 h-5 text-purple-600"></i>
+                                </div>
+                                <div class="flex flex-col items-start gap-1 flex-grow">
+                                    <div class="text-sm font-medium text-gray-800 w-full">product-mockup.png</div>
+                                    <div class="text-xs text-gray-500 w-full">20분 전</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-row items-center gap-3">
+                                <div class="flex flex-row justify-center items-center px-3 py-1.5 h-6 bg-gray-100 rounded-lg">
+                                    <span class="text-xs font-medium text-gray-600">2.1MB</span>
+                                </div>
+                                <div class="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-gray-100 cursor-pointer">
+                                    <i data-lucide="more-vertical" class="w-4 h-4 text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 동기화 상태 -->
+                <div class="absolute flex flex-row items-center px-6 py-4 gap-3 h-12 left-0 right-0 bottom-0 bg-gradient-to-r from-green-50 to-emerald-50 rounded-b-3xl border-t border-green-100">
+                    <div class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <i data-lucide="check" class="w-3 h-3 text-white"></i>
+                    </div>
+                    <span class="text-sm text-green-700 font-medium">마지막 동기화: 3분 전</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Lucide 아이콘 초기화
+        lucide.createIcons();
+
+        // 탭 전환 함수
+        function switchTab(tab) {
+            const uploadTab = document.getElementById('uploadTab');
+            const recentTab = document.getElementById('recentTab');
+            const uploadPanel = document.getElementById('uploadPanel');
+            const recentPanel = document.getElementById('recentPanel');
+
+            if (tab === 'upload') {
+                uploadTab.className = 'btn flex justify-center items-center py-2 px-6 gap-2.5 flex-1 h-7 rounded-full tab-active';
+                recentTab.className = 'btn flex justify-center items-center py-2 px-6 gap-2.5 flex-1 h-7 rounded-full tab-inactive';
+                uploadPanel.classList.remove('hidden');
+                recentPanel.classList.add('hidden');
+            } else {
+                uploadTab.className = 'btn flex justify-center items-center py-2 px-6 gap-2.5 flex-1 h-7 rounded-full tab-inactive';
+                recentTab.className = 'btn flex justify-center items-center py-2 px-6 gap-2.5 flex-1 h-7 rounded-full tab-active';
+                uploadPanel.classList.add('hidden');
+                recentPanel.classList.remove('hidden');
+            }
+        }
+
+        // 파일 드래그 앤 드롭 기능
+        const dropZone = document.querySelector('.upload-zone');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            if (!dropZone.contains(e.relatedTarget)) {
+                dropZone.classList.remove('drag-over');
+            }
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        // 파일 선택 처리
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        // 파일 처리 함수 개선
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            Array.from(files).forEach(file => {
+                // 파일 크기 체크 (10MB 제한)
+                if (file.size > 10 * 1024 * 1024) {
+                    showNotification(`파일 "${file.name}"이 너무 큽니다. (최대 10MB)`, 'error');
+                    return;
+                }
+                
+                // 파일 형식 체크
+                const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
+                if (!allowedTypes.includes(file.type)) {
+                    showNotification(`파일 형식이 지원되지 않습니다: ${file.name}`, 'error');
+                    return;
+                }
+                
+                console.log('업로드된 파일:', file.name, file.size, file.type);
+                showNotification(`파일 "${file.name}"이 성공적으로 선택되었습니다.`, 'success');
+                
+                // 여기에 실제 파일 업로드 로직을 추가할 수 있습니다
+                simulateUpload(file);
+            });
+        }
+        
+        // 업로드 시뮬레이션
+        function simulateUpload(file) {
+            // 실제 프로젝트에서는 여기에 서버로 파일을 전송하는 코드를 작성합니다
+            setTimeout(() => {
+                showNotification(`파일 "${file.name}" 업로드 완료!`, 'success');
+            }, 2000);
+        }
+        
+        // 알림 표시 함수
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-6 right-6 px-6 py-4 rounded-xl text-white font-medium shadow-lg z-50 transform transition-all duration-300 translate-x-full`;
+            
+            if (type === 'success') {
+                notification.classList.add('bg-green-500');
+            } else if (type === 'error') {
+                notification.classList.add('bg-red-500');
+            } else {
+                notification.classList.add('bg-blue-500');
+            }
+            
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // 애니메이션으로 표시
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            // 3초 후 제거
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html> 
