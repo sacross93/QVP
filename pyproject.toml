@@ -1,0 +1,11 @@
+[project]
+name = "qvp"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-core>=0.3.63",
+    "langchain-ollama>=0.3.3",
+    "langgraph>=0.4.7",
+    "pydantic>=2.11.5",
+]
