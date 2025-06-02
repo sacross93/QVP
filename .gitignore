@@ -177,4 +177,9 @@ cython_debug/
 # data
 /data/*
 /data
+/prompt
+/prompt/*
+/result
+/result/*
+
 
