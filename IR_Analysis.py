@@ -187,12 +187,32 @@ def extract_fields(state: ExtractionState) -> ExtractionState:
         print(f"JSON Error: {e}")
         extracted_data = {}
     
-    # 새로 채워진 필드 계산
+    # 무효한 값들 필터링 (Not specified, 데이터 없음 등은 null로 처리)
+    invalid_values = {
+        "Not specified", "not specified", "NOT SPECIFIED",
+        "데이터 없음", "정보 없음", "해당 없음", "명시되지 않음",
+        "N/A", "n/a", "NA", "na", "null", "NULL", "None", "NONE",
+        "정보 부족", "확인 불가", "불명", "미확인", "미명시",
+        "-", "—", "–", "", "정보가 없음", "자료 없음"
+    }
+    
+    # 새로 채워진 필드 계산 (유효한 값만)
     newly_filled = 0
     for k, v in extracted_data.items():
-        if v is not None and k in StartupInvestmentInfo.model_fields and getattr(info, k) is None:
-            setattr(info, k, v)
-            newly_filled += 1
+        if k in StartupInvestmentInfo.model_fields and getattr(info, k) is None:
+            # 무효한 값인지 확인
+            is_invalid = False
+            if isinstance(v, str):
+                is_invalid = v.strip() in invalid_values or len(v.strip()) == 0
+            elif v is None:
+                is_invalid = True
+            
+            if not is_invalid:
+                setattr(info, k, v)
+                newly_filled += 1
+                print(f"    ✓ {k}: {v}")
+            else:
+                print(f"    ✗ {k}: '{v}' (무효한 값으로 필터링됨)")
     
     print(f"  Successfully filled {newly_filled} new fields")
     
@@ -334,10 +354,10 @@ workflow.add_conditional_edges(
 app = workflow.compile()
 
 # 3. md 파일 읽기 및 정보 추출
-with open("./data/로보스.md", "r", encoding="utf-8") as f:
+with open("./data/블루브릿지글로벌.md", "r", encoding="utf-8") as f:
     md_file_content = f.read()
 
-print("=== Starting extraction from 로보스.md ===")
+print("=== Starting extraction from 블루브릿지글로벌.md ===")
 print(f"MD file content length: {len(md_file_content)} characters")
 
 # 초기 상태 설정
