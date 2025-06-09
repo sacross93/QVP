@@ -122,6 +122,46 @@ CRITICAL RULES:
 5. Use exact Korean text as found in the document
 6. Be sure to write only what is in the MD document content. If you don't know, write None.
 
+DOCUMENT STRUCTURE PATTERNS TO LOOK FOR:
+
+For company_name:
+- Look in document titles, headers, or company info sections
+- Common Korean labels: "회사명", "상호", "기업명", "회사개요", "Company Info"
+- Often appears in tables with company details
+
+For contact_person:
+- Look in "Investor Relations" sections, team descriptions, or contact info
+- Common patterns: "대표", "CEO", "연락담당자", "Contact"
+- Usually appears with names and titles
+
+For contact_phone:
+- Look for Korean phone number patterns: +82-xx-xxxx-xxxx or similar
+- Common labels: "전화", "연락처", "Company", "Personal"
+- Often in contact or company info sections
+
+For industry:
+- Look in business descriptions, company overview sections
+- Common labels: "업종", "사업분야", "업종", "주요사업"
+- May appear in tables or descriptive text
+
+For funding info (funding_stage, funding_amount_billion, valuation_billion):
+- Look for "투자", "자금조달", "시리즈A/B", "밸류에이션", "Post Value"
+- Convert Korean numbers: 억=100million, 천만=10million, 만=10thousand
+
+For financial data (revenue, profit, costs):
+- Look for "매출", "영업이익", "자본금", "운영비"
+- Convert Korean numbers accordingly
+
+For personnel info (num_employees, team info):
+- Look for "임직원수", "직원수", "구성원", team member lists
+
+For competitors:
+- Look for "경쟁사", "경쟁업체", competitor analysis sections
+
+For last_updated:
+- Look for document dates, publication dates, or "최종수정일"
+- Date formats may vary (YYYY-MM-DD, YYYY년 MM월 등)
+
 MD document content:
 ```
 {md_content}
@@ -132,6 +172,7 @@ Fields to extract: ```{dict(zip(fields_to_fill, field_descriptions))}```
 
 Be sure to write only what is in the MD document content. If you don't know, write None.
 Return ONLY a valid JSON object with the specified field names. Extract real values from the document, not placeholder data.
+/no_think
 """
     
     # 프롬프트 저장용 (MD 내용 생략)
@@ -255,50 +296,78 @@ def analyze_failure(state: ExtractionState) -> ExtractionState:
     md_content = state["md_content"]
     iteration = state["iteration"]
     
-    # 빈 필드들 찾기
+    # 빈 필드들 찾기 (처음 10개만)
     failed_fields = [field for field in StartupInvestmentInfo.model_fields if getattr(info, field) is None]
-    failed_fields_sample = failed_fields # 이제 모든 실패한 필드를 사용합니다.
+    failed_fields_sample = failed_fields[:10]  # 32B 모델을 위해 처음 10개만
     
     print("No progress detected. Running failure analysis...")
     
-    # 분석 프롬프트 (추출 조언 생성용으로 복원)
-    prompt_text = (
-        "You are an expert analyst. Your goal is to help an automated extractor find missing information "
-        "from a Korean startup IR document. For the fields listed as 'Failed fields', the extractor "
-        "could not find the information. Please analyze the provided 'IR Document' and suggest "
-        "actionable strategies for a next extraction attempt.\\n\\n"
-        "Failed fields and their descriptions:\\n"
-    )
-    for field_name in failed_fields_sample:
-        description = StartupInvestmentInfo.model_fields[field_name].description
-        prompt_text += f"- {field_name} ({description})\\n"
+    # 간결한 분석 프롬프트
+    prompt = (
+"""IR Document:```{{md_content}}```
 
-    prompt_text += (
-        f"\\nIR Document Content:\\n```\\n{md_content}\\n```\\n\\n"
-        "For EACH failed field, provide concise, actionable advice. Consider:\\n"
-        "1.  Alternative Korean keywords or phrases to search for related to the field's description.\\n"
-        "2.  Specific document sections, headers, or table structures where this type of information is typically found in Korean IR/business documents.\\n"
-        "3.  Common ways this information might be phrased or presented if not directly using the field's name (e.g., '인력 현황' for 'num_employees').\\n"
-        "4.  If the information for a specific field is genuinely unlikely to be in this document based on its overall content and style, please state that.\\n\\n"
-        "Focus on concrete, practical suggestions to improve the next extraction attempt. "
-        "The output should be a plain text response, directly usable as feedback. Do NOT use JSON. "
-        "Keep the advice for each field brief and to the point. Do not add any extra explanations before or after the advice list."
+Target Fields for Summarization: ```{{target_fields_list}}```
+(예: "연간 매출", "유저 수", "투자 유치 금액", "경쟁사", "고객 확보 전략")
+
+Instructions:
+Based on the IR Document provided, you will generate a summary focused on the 'Target Fields for Summarization'. This summary will be created in a "Chain of Density" manner, progressively becoming more detailed and entity-rich across 3 stages, while trying to maintain a reasonable overall length.
+
+For each stage, focus on incorporating information related to the 'Target Fields for Summarization'.
+
+---
+
+**Stage 1: Sparse Summary (Key Facts Extraction)**
+*   **Objective:** Identify and extract the most direct values or key statements for each of the 'Target Fields for Summarization' from the IR document. If a direct value is not found, state "정보 없음" or a brief reason.
+*   **Output:** A very concise summary (1-2 sentences per field, or a bulleted list) presenting these extracted key facts with minimal context. Focus on accuracy and directness.
+    *   Example for "연간 매출": "2023년 연간 매출: 10억 원." or "연간 매출: 현재 비공개, 성장세 강조."
+    *   Example for "경쟁사": "주요 경쟁사: A사, B사 언급." or "경쟁사: 구체적 언급 없음, 시장 선도 목표."
+
+---
+
+**Stage 2: Denser Summary (Contextual Integration)**
+*   **Objective:** Re-write the Stage 1 summary to be more fluent and integrated. Add relevant context, brief explanations, or supporting details for the extracted field values from the surrounding text in the IR document. If multiple target fields are related, start to show these connections.
+*   **Guidelines:**
+    *   Do not simply list facts; weave them into a coherent narrative.
+    *   Incorporate 1-2 additional pieces of relevant information (entities, brief explanations, or supporting data points from the IR document) for each target field, or for the summary as a whole, compared to Stage 1.
+    *   Maintain conciseness but improve readability and information flow.
+    *   If a field had "정보 없음" in Stage 1, explain briefly why based on the document (e.g., "초기 단계로 매출 비공개 상태이며, 대신 사용자 증가율에 집중하고 있음.").
+*   **Output:** A more detailed paragraph-style summary that connects the key facts with their immediate context.
+
+---
+
+**Stage 3: Densest Summary (Comprehensive Overview & Insights)**
+*   **Objective:** Create the most informative summary by further enriching the Stage 2 summary. Incorporate more nuanced details, interconnections between different target fields, and potentially implied insights or strategic importance as suggested by the IR document.
+*   **Guidelines:**
+    *   Fuse and compress information effectively to add more detail without excessive length.
+    *   Incorporate another 1-2 significant pieces of information (e.g., specific strategies related to a field, quantitative backing, future outlook related to a field, comparisons if available) for each target field or for the overall narrative.
+    *   The summary should provide a good, self-contained overview of the startup's position regarding the target fields.
+    *   If information for a field remains absent, reflect this accurately within the broader context.
+*   **Output:** A rich, concise, and insightful summary that provides a comprehensive understanding of the IR document's content related to the specified target fields.
+
+---
+
+Please generate the 3-stage CoD summary focusing on the 'Target Fields for Summarization'.
+Present each stage clearly labeled./no_think"""
     )
     
-    # 프롬프트 저장용 (MD 내용 생략)
+    # 분석 프롬프트 저장용 (MD 내용 생략)
     os.makedirs("prompt", exist_ok=True)
     prompt_for_save = (
-        "Analyze why these fields couldn't be extracted and provide actionable tips.\\n\\n"
-        f"Failed fields: { [f'{fn} ({StartupInvestmentInfo.model_fields[fn].description})' for fn in failed_fields_sample] }\\n\\n"
-        f"MD content: [MD_CONTENT_OMITTED - {len(md_content)} characters]\\n\\n"
-        "Response should be actionable extraction tips for each field."
+        "Analyze why these fields couldn't be extracted from the Korean startup IR document:\n\n"
+        f"Failed fields: {failed_fields_sample}\n\n"
+        "For each field, provide:\n"
+        "- Korean keywords to look for\n"
+        "- Likely section/table names\n"
+        "- Alternative extraction approach\n\n"
+        f"MD content: [MD_CONTENT_OMITTED - {len(md_content)} characters]\n\n"
+        "Keep response concise. Focus on actionable extraction tips."
     )
     
     with open(f"prompt/iteration_{iteration:02d}_analyze_prompt.txt", "w", encoding="utf-8") as f:
-        f.write(prompt_for_save) # Save the conceptual prompt
+        f.write(prompt_for_save)
     print(f"  Analysis prompt saved to: prompt/iteration_{iteration:02d}_analyze_prompt.txt")
     
-    result = llm.invoke(prompt_text) # Use the detailed prompt_text for LLM
+    result = llm.invoke(prompt)
     analysis_feedback = re.sub(r'<think>.*?</think>', '', result.content, flags=re.DOTALL).strip()
     
     # 분석 응답 저장
@@ -362,178 +431,6 @@ def should_continue(state: ExtractionState) -> str:
     
     # 그 외에는 계속 추출
     return "extract"
-
-# 필드 검증 함수
-def verify_field(state: ExtractionState) -> ExtractionState:
-    """채워진 필드값을 MD 파일과 대조하여 검증합니다."""
-    info = state["info"]
-    md_content = state["md_content"]
-    verification_index = state["verification_index"]
-    verified_fields = state["verified_fields"].copy()
-    
-    # 채워진 필드들만 가져오기
-    filled_fields = [(field, getattr(info, field)) for field in StartupInvestmentInfo.model_fields 
-                    if getattr(info, field) is not None]
-    
-    if verification_index >= len(filled_fields):
-        print("모든 필드 검증 완료!")
-        return {
-            **state,
-            "last_action": "verify_complete"
-        }
-    
-    current_field, current_value = filled_fields[verification_index]
-    field_description = StartupInvestmentInfo.model_fields[current_field].description
-    
-    print(f"\n[Verification {verification_index + 1}/{len(filled_fields)}] 검증 중: {current_field}")
-    print(f"  현재 값: {current_value}")
-    print(f"  설명: {field_description}")
-    
-    # 검증 프롬프트
-    prompt = f"""
-당신은 한국 스타트업 IR 문서의 데이터 검증 전문가입니다. 
-추출된 필드값이 MD 문서의 내용과 일치하는지 검증하고 근거를 제시해주세요.
-
-검증 대상:
-- 필드명: {current_field}
-- 필드 설명: {field_description}  
-- 추출된 값: {current_value}
-
-MD 문서 내용:
-```
-{md_content}
-```
-
-검증 절차:
-1. MD 문서에서 해당 필드와 관련된 정보를 찾아주세요
-2. 추출된 값이 문서 내용과 일치하는지 판단해주세요
-3. 근거가 되는 문서의 구체적인 문장이나 표현을 인용해주세요
-
-응답 형식 (JSON):
-{{
-    "field_name": "{current_field}",
-    "extracted_value": "{current_value}",
-    "is_valid": true/false,
-    "evidence": "문서에서 찾은 구체적인 근거 문장",
-    "corrected_value": "수정이 필요한 경우 올바른 값 (is_valid가 true면 null)",
-    "reasoning": "검증 근거 및 판단 이유"
-}}
-
-중요한 규칙:
-- 문서에 명시적으로 나와있는 정보만 유효하다고 판단
-- 추론이나 추측은 유효하지 않음
-- 숫자의 경우 단위와 정확한 값 확인
-- 날짜의 경우 정확한 형식 확인
-- 근거가 불분명하면 is_valid를 false로 설정
-
-JSON만 반환해주세요.
-"""
-    
-    # 프롬프트 저장
-    os.makedirs("prompt/verification", exist_ok=True)
-    prompt_for_save = (
-        f"필드 검증 프롬프트\n\n"
-        f"검증 대상:\n"
-        f"- 필드명: {current_field}\n"
-        f"- 필드 설명: {field_description}\n"
-        f"- 추출된 값: {current_value}\n\n"
-        f"MD 내용: [MD_CONTENT_OMITTED - {len(md_content)} 문자]\n\n"
-        f"검증 절차: MD 문서에서 근거 찾기, 값 일치 여부 판단, 구체적 인용\n"
-        f"응답: JSON 형식으로 is_valid, evidence, corrected_value, reasoning 포함"
-    )
-    
-    with open(f"prompt/verification/verify_{current_field}.txt", "w", encoding="utf-8") as f:
-        f.write(prompt_for_save)
-    print(f"  검증 프롬프트 저장: prompt/verification/verify_{current_field}.txt")
-    
-    result = llm.invoke(prompt)
-    
-    # 응답 저장
-    with open(f"prompt/verification/verify_{current_field}_response.txt", "w", encoding="utf-8") as f:
-        f.write(str(result.content))
-    print(f"  검증 응답 저장: prompt/verification/verify_{current_field}_response.txt")
-    
-    # 결과 처리
-    try:
-        if isinstance(result.content, str):
-            cleaned_content = re.sub(r'<think>.*?</think>', '', result.content, flags=re.DOTALL).strip()
-            json_match = re.search(r'\{.*\}', cleaned_content, flags=re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                verification_result = json.loads(json_str)
-            else:
-                print(f"경고: 응답에서 JSON을 찾을 수 없음: {cleaned_content[:100]}...")
-                verification_result = {"is_valid": True}  # 기본값으로 유효하다고 판단
-        else:
-            verification_result = result.content
-    except json.JSONDecodeError as e:
-        print(f"경고: JSON 파싱 실패: {result.content[:100]}...")
-        print(f"JSON 오류: {e}")
-        verification_result = {"is_valid": True}  # 기본값으로 유효하다고 판단
-    
-    # 검증 결과 처리
-    is_valid = verification_result.get("is_valid", True)
-    evidence = verification_result.get("evidence", "근거 없음")
-    corrected_value = verification_result.get("corrected_value")
-    reasoning = verification_result.get("reasoning", "검증 완료")
-    
-    if is_valid:
-        print(f"  ✅ 검증 통과")
-        print(f"  📝 근거: {evidence[:100]}...")
-    else:
-        print(f"  ❌ 검증 실패")
-        print(f"  📝 이유: {reasoning}")
-        print(f"  🔧 수정값: {corrected_value}")
-        
-        # 값 수정 - 적절한 타입 변환 포함
-        # null 값들을 포괄적으로 처리
-        null_values = [None, "null", "None", "", "정보 없음", "데이터 없음"]
-        
-        if corrected_value not in null_values and corrected_value:
-            # 필드 타입 정보 가져오기
-            field_type = StartupInvestmentInfo.model_fields[current_field].annotation
-            
-            try:
-                # 타입에 따른 변환
-                if field_type == int or str(field_type).startswith('typing.Union[int'):
-                    converted_value = int(corrected_value)
-                elif field_type == bool or str(field_type).startswith('typing.Union[bool'):
-                    converted_value = str(corrected_value).lower() in ['true', '1', 'yes', 'on']
-                elif 'List' in str(field_type):
-                    # 리스트 타입인 경우
-                    if isinstance(corrected_value, str):
-                        # 쉼표로 구분된 문자열을 리스트로 변환
-                        converted_value = [item.strip() for item in corrected_value.split(',')]
-                    else:
-                        converted_value = corrected_value
-                else:
-                    # 문자열 또는 기타 타입
-                    converted_value = corrected_value
-                
-                setattr(info, current_field, converted_value)
-                print(f"  🔄 {current_field} 값을 '{current_value}' → '{converted_value}'로 수정")
-                print(f"  📊 타입: {field_type} → {type(converted_value)}")
-                
-            except (ValueError, TypeError) as e:
-                print(f"  ⚠️ 타입 변환 실패: {e}")
-                print(f"  🗑️ {current_field} 값을 null로 설정")
-                setattr(info, current_field, None)
-        else:
-            # null 값이거나 빈 값인 경우
-            setattr(info, current_field, None)
-            reason = "문서에 정보가 없어" if corrected_value in [None, "null", "None"] else "유효하지 않은 값이어서"
-            print(f"  🗑️ {current_field} 값을 '{current_value}' → null로 변경 ({reason})")
-    
-    # 검증 완료된 필드에 추가
-    verified_fields.append(current_field)
-    
-    return {
-        **state,
-        "info": info,
-        "verification_index": verification_index + 1,
-        "verified_fields": verified_fields,
-        "last_action": "verify"
-    }
 
 # 그래프 생성
 workflow = StateGraph(ExtractionState)
@@ -684,3 +581,144 @@ empty_fields = {k: v for k, v in info_dict.items() if v is None}
 for field_name, value in empty_fields.items():
     field_desc = StartupInvestmentInfo.model_fields[field_name].description
     print(f"✗ {field_name} ({field_desc}): 데이터 없음")
+
+# 필드 검증 함수
+def verify_field(state: ExtractionState) -> ExtractionState:
+    """채워진 필드값을 MD 파일과 대조하여 검증합니다."""
+    info = state["info"]
+    md_content = state["md_content"]
+    verification_index = state["verification_index"]
+    verified_fields = state["verified_fields"].copy()
+    
+    # 채워진 필드들만 가져오기
+    filled_fields = [(field, getattr(info, field)) for field in StartupInvestmentInfo.model_fields 
+                    if getattr(info, field) is not None]
+    
+    if verification_index >= len(filled_fields):
+        print("모든 필드 검증 완료!")
+        return {
+            **state,
+            "last_action": "verify_complete"
+        }
+    
+    current_field, current_value = filled_fields[verification_index]
+    field_description = StartupInvestmentInfo.model_fields[current_field].description
+    
+    print(f"\n[Verification {verification_index + 1}/{len(filled_fields)}] 검증 중: {current_field}")
+    print(f"  현재 값: {current_value}")
+    print(f"  설명: {field_description}")
+    
+    # 검증 프롬프트
+    prompt = f"""
+당신은 한국 스타트업 IR 문서의 데이터 검증 전문가입니다. 
+추출된 필드값이 MD 문서의 내용과 일치하는지 검증하고 근거를 제시해주세요.
+
+검증 대상:
+- 필드명: {current_field}
+- 필드 설명: {field_description}  
+- 추출된 값: {current_value}
+
+MD 문서 내용:
+```
+{md_content}
+```
+
+검증 절차:
+1. MD 문서에서 해당 필드와 관련된 정보를 찾아주세요
+2. 추출된 값이 문서 내용과 일치하는지 판단해주세요
+3. 근거가 되는 문서의 구체적인 문장이나 표현을 인용해주세요
+
+응답 형식 (JSON):
+{{
+    "field_name": "{current_field}",
+    "extracted_value": "{current_value}",
+    "is_valid": true/false,
+    "evidence": "문서에서 찾은 구체적인 근거 문장",
+    "corrected_value": "수정이 필요한 경우 올바른 값 (is_valid가 true면 null)",
+    "reasoning": "검증 근거 및 판단 이유"
+}}
+
+중요한 규칙:
+- 문서에 명시적으로 나와있는 정보만 유효하다고 판단
+- 추론이나 추측은 유효하지 않음
+- 숫자의 경우 단위와 정확한 값 확인
+- 날짜의 경우 정확한 형식 확인
+- 근거가 불분명하면 is_valid를 false로 설정
+
+JSON만 반환해주세요.
+"""
+    
+    # 프롬프트 저장
+    os.makedirs("prompt/verification", exist_ok=True)
+    prompt_for_save = (
+        f"필드 검증 프롬프트\n\n"
+        f"검증 대상:\n"
+        f"- 필드명: {current_field}\n"
+        f"- 필드 설명: {field_description}\n"
+        f"- 추출된 값: {current_value}\n\n"
+        f"MD 내용: [MD_CONTENT_OMITTED - {len(md_content)} 문자]\n\n"
+        f"검증 절차: MD 문서에서 근거 찾기, 값 일치 여부 판단, 구체적 인용\n"
+        f"응답: JSON 형식으로 is_valid, evidence, corrected_value, reasoning 포함"
+    )
+    
+    with open(f"prompt/verification/verify_{current_field}.txt", "w", encoding="utf-8") as f:
+        f.write(prompt_for_save)
+    print(f"  검증 프롬프트 저장: prompt/verification/verify_{current_field}.txt")
+    
+    result = llm.invoke(prompt)
+    
+    # 응답 저장
+    with open(f"prompt/verification/verify_{current_field}_response.txt", "w", encoding="utf-8") as f:
+        f.write(str(result.content))
+    print(f"  검증 응답 저장: prompt/verification/verify_{current_field}_response.txt")
+    
+    # 결과 처리
+    try:
+        if isinstance(result.content, str):
+            cleaned_content = re.sub(r'<think>.*?</think>', '', result.content, flags=re.DOTALL).strip()
+            json_match = re.search(r'\{.*\}', cleaned_content, flags=re.DOTALL)
+            if json_match:
+                json_str = json_match.group()
+                verification_result = json.loads(json_str)
+            else:
+                print(f"경고: 응답에서 JSON을 찾을 수 없음: {cleaned_content[:100]}...")
+                verification_result = {"is_valid": True}  # 기본값으로 유효하다고 판단
+        else:
+            verification_result = result.content
+    except json.JSONDecodeError as e:
+        print(f"경고: JSON 파싱 실패: {result.content[:100]}...")
+        print(f"JSON 오류: {e}")
+        verification_result = {"is_valid": True}  # 기본값으로 유효하다고 판단
+    
+    # 검증 결과 처리
+    is_valid = verification_result.get("is_valid", True)
+    evidence = verification_result.get("evidence", "근거 없음")
+    corrected_value = verification_result.get("corrected_value")
+    reasoning = verification_result.get("reasoning", "검증 완료")
+    
+    if is_valid:
+        print(f"  ✅ 검증 통과")
+        print(f"  📝 근거: {evidence[:100]}...")
+    else:
+        print(f"  ❌ 검증 실패")
+        print(f"  📝 이유: {reasoning}")
+        print(f"  🔧 수정값: {corrected_value}")
+        
+        # 값 수정
+        if corrected_value is not None:
+            setattr(info, current_field, corrected_value)
+            print(f"  🔄 {current_field} 값을 '{corrected_value}'로 수정")
+        else:
+            setattr(info, current_field, None)
+            print(f"  🗑️ {current_field} 값을 null로 변경")
+    
+    # 검증 완료된 필드에 추가
+    verified_fields.append(current_field)
+    
+    return {
+        **state,
+        "info": info,
+        "verification_index": verification_index + 1,
+        "verified_fields": verified_fields,
+        "last_action": "verify"
+    }
