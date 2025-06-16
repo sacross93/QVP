@@ -2,6 +2,7 @@ from sentence_transformers import SentenceTransformer
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_ollama import ChatOllama
 import torch
+from glob import glob
 
 # GPU 장치 설정
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -9,6 +10,8 @@ print(f"Using device: {device}")
 
 # Download from the 🤗 Hub
 model = SentenceTransformer("dragonkue/bge-m3-ko", device=device)
+
+mds = glob("./data/*.md")
 
 with open("./data/로보스.md", "r", encoding="utf-8") as f:
     md_file_content = f.read()

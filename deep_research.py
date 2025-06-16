@@ -4,6 +4,9 @@ from langchain_core.prompts import PromptTemplate
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain.agents import Tool, create_react_agent, AgentExecutor
 from langchain_core.output_parsers import StrOutputParser
+import re
+from glob import glob
+import os
 
 # 1. LLM 및 검색 도구 설정
 llm = ChatOllama(
@@ -67,43 +70,67 @@ agent_executor = AgentExecutor(
 
 # 4. 메인 실행 로직
 if __name__ == "__main__":
-    try:
-        with open('result/swot_analysis.json', 'r', encoding='utf-8') as f:
-            swot_data = json.load(f)
-    except FileNotFoundError:
-        print("오류: 'result/swot_analysis.json' 파일을 찾을 수 없습니다.")
-        print("먼저 'python SWOT.py'를 실행하여 분석 파일을 생성해주세요.")
-        exit()
-
-    swot_input_string = json.dumps(swot_data, ensure_ascii=False, indent=2)
-
-    print("=" * 30)
-    print("🤖 Deep Research 에이전트를 시작합니다...")
-    print("=" * 30)
+    swot_files = glob('./result/swot_analysis_*.json')
     
-    result = agent_executor.invoke({
-        "input": swot_input_string,
-    })
+    for output in swot_files:
+        try:
+            with open(output, 'r', encoding='utf-8') as f:
+                swot_data = json.load(f)
+        except FileNotFoundError:
+            print("오류: 'result/swot_analysis.json' 파일을 찾을 수 없습니다.")
+            print("먼저 'python SWOT.py'를 실행하여 분석 파일을 생성해주세요.")
+            exit()
 
-    print("\n" + "=" * 30)
-    print("✅ Deep Research 최종 보고서 (영문)")
-    print("=" * 30)
-    print(result['output']) 
+        swot_input_string = json.dumps(swot_data, ensure_ascii=False, indent=2)
 
-    # 5. 최종 보고서를 한국어로 번역
-    if result['output']:
-        print("\n" + "=" * 30)
-        print("🇰🇷 최종 보고서 (한국어 번역)")
+        print("=" * 30)
+        print("🤖 Deep Research 에이전트를 시작합니다...")
         print("=" * 30)
         
-        translation_prompt = PromptTemplate.from_template(
-            "Translate the following English text to Korean. Maintain the original structure and formatting, including markdown like headers and bullet points:\n\n{english_text}"
-        )
-        
-        translation_chain = translation_prompt | llm | StrOutputParser()
+        result = agent_executor.invoke({
+            "input": swot_input_string,
+        })
 
-        korean_report = translation_chain.invoke({"english_text": result['output']})
-        
-        print(korean_report)
-    else:
-        print("\n번역할 내용이 없습니다.") 
+        print("\n" + "=" * 30)
+        print("✅ Deep Research 최종 보고서 (영문)")
+        print("=" * 30)
+        print(result['output']) 
+
+        korean_report = "" # 번역본을 저장할 변수 초기화
+        # 5. 최종 보고서를 한국어로 번역
+        if result['output']:
+            print("\n" + "=" * 30)
+            print("🇰🇷 최종 보고서 (한국어 번역)")
+            print("=" * 30)
+            
+            translation_prompt = PromptTemplate.from_template(
+                "Translate the following English text to Korean. Maintain the original structure and formatting, including markdown like headers and bullet points:\n\n{english_text}"
+            )
+            
+            translation_chain = translation_prompt | llm | StrOutputParser()
+
+            korean_report = translation_chain.invoke({"english_text": result['output']})
+            
+            # <think>...</think> 태그와 그 내용을 정규식을 사용하여 제거
+            think_pattern = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+            korean_report = think_pattern.sub("", korean_report).strip()
+
+            print(korean_report)
+        else:
+            print("\n번역할 내용이 없습니다.")
+
+        # 6. 최종 보고서를 JSON 파일로 저장
+        if result['output']:
+            report_data = {
+                "english_report": result['output'],
+                "korean_report": korean_report
+            }
+            
+            base_name = os.path.basename(output)
+            identifier = base_name.replace('swot_analysis_', '').replace('.json', '')
+            output_path = f'result/deep_research_report_{identifier}.json'
+
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, ensure_ascii=False, indent=4)
+            
+            print(f"\n✅ 최종 보고서가 {output_path} 에 성공적으로 저장되었습니다.") 
