@@ -1,90 +1,63 @@
 import json
+import argparse
 import sys
 import os
-from glob import glob
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
-def print_report(file_path):
+def display_report(file_path: str):
     """
-    딥 리서치 보고서 JSON 파일을 읽어 터미널에 보기 좋게 출력하고,
-    사용자 요청 시 한글 보고서를 .md 파일로 저장합니다.
+    Reads a strategic report JSON file and prints its contents
+    in a nicely formatted way to the terminal.
     """
+    console = Console()
+
+    # 1. 파일 존재 여부 확인
+    if not os.path.exists(file_path):
+        console.print(f"[bold red]🚨 ERROR: File not found at '{file_path}'[/bold red]")
+        sys.exit(1)
+
+    # 2. JSON 파일 로드
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-    except FileNotFoundError:
-        print(f"오류: 파일 '{file_path}'를 찾을 수 없습니다.")
-        return
     except json.JSONDecodeError:
-        print(f"오류: '{file_path}' 파일이 올바른 JSON 형식이 아닙니다.")
-        return
+        console.print(f"[bold red]🚨 ERROR: Could not decode JSON from '{file_path}'. The file might be corrupted.[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]🚨 ERROR: An unexpected error occurred while reading the file: {e}[/bold red]")
+        sys.exit(1)
 
-    # 파일명에서 회사 이름 추출
-    company_name = os.path.basename(file_path).replace('deep_research_report_', '').replace('.json', '').replace('_extracted_info', '')
+    # 3. 데이터 추출
+    identifier = data.get("source_identifier", "N/A")
+    briefing_notes = data.get("briefing_notes_markdown", "Briefing notes not found.")
+    strategic_report = data.get("strategic_report_markdown", "Strategic report not found.")
 
-    print("\n" + "=" * 80)
-    print(f"📄 Deep Research 분석 보고서: {company_name}")
-    print("=" * 80)
+    # 4. 보고서 출력
+    console.print(Panel(f"[bold cyan]Strategic Report for: {identifier}[/bold cyan]", title="QVP Analysis Report", expand=False, border_style="blue"))
 
-    if 'english_report' in data and data['english_report']:
-        print("\n" + "--- 🇬🇧 English Report ---")
-        print(data['english_report'])
-    
-    if 'korean_report' in data and data['korean_report']:
-        print("\n" + "--- 🇰🇷 Korean Report (번역) ---")
-        print(data['korean_report'])
+    console.print("\n\n" + "="*80, style="bold green")
+    console.print("📄 1. 분석 브리핑 노트 (Briefing Notes)", style="bold green")
+    console.print("="*80 + "\n", style="bold green")
+    console.print(Markdown(briefing_notes))
 
-    print("\n" + "=" * 80)
-
-    # 보고서 출력 후, 한글 보고서가 있으면 저장 여부를 물어봄
-    if 'korean_report' in data and data['korean_report']:
-        try:
-            save_choice = input("\n이 한글 보고서를 마크다운(.md) 파일로 저장하시겠습니까? (y/n): ").lower()
-            if save_choice in ['y', 'yes', 'ㅛ']:
-                # 저장할 파일 경로 생성 (예: .../report.json -> .../report.md)
-                md_path = os.path.splitext(file_path)[0] + '.md'
-                
-                with open(md_path, 'w', encoding='utf-8') as f:
-                    f.write(data['korean_report'])
-                print(f"\n✅ 보고서가 성공적으로 저장되었습니다: {md_path}")
-
-        except KeyboardInterrupt:
-            print("\n저장을 취소했습니다.")
-        except Exception as e:
-            print(f"\n❌ 파일 저장 중 오류가 발생했습니다: {e}")
+    console.print("\n\n" + "="*80, style="bold blue")
+    console.print("📈 2. 최종 전략 보고서 (Strategic Report)", style="bold blue")
+    console.print("="*80 + "\n", style="bold blue")
+    console.print(Markdown(strategic_report))
 
 
 if __name__ == "__main__":
-    # 터미널에서 파일 경로를 인자로 받았을 경우
-    if len(sys.argv) > 1:
-        file_path = sys.argv[1]
-        if not os.path.exists(file_path):
-            print(f"오류: 지정된 경로에 파일이 없습니다: {file_path}")
-        elif not file_path.endswith('.json'):
-             print(f"오류: JSON 파일만 지원됩니다: {file_path}")
-        else:
-            print_report(file_path)
-    else:
-        # 인자가 없을 경우, result 폴더에서 보고서를 찾아 목록을 보여줌
-        report_files = glob('./result/deep_research_report_*.json')
-        if not report_files:
-            print("사용 가능한 보고서 파일이 'result/' 폴더에 없습니다.")
-        else:
-            print("다음은 사용 가능한 분석 보고서 목록입니다:")
-            for i, file in enumerate(report_files):
-                company_name = os.path.basename(file).replace('deep_research_report_', '').replace('.json', '').replace('_extracted_info', '')
-                print(f"  [{i + 1}] {company_name}")
-            
-            try:
-                choice = input("\n내용을 확인하고 싶은 보고서의 번호를 입력하세요 (나가려면 q): ")
-                if choice.lower() == 'q':
-                    print("프로그램을 종료합니다.")
-                else:
-                    choice_num = int(choice) - 1
-                    if 0 <= choice_num < len(report_files):
-                        print_report(report_files[choice_num])
-                    else:
-                        print("잘못된 번호입니다.")
-            except ValueError:
-                print("숫자를 입력해주세요.")
-            except KeyboardInterrupt:
-                print("\n프로그램을 종료합니다.") 
+    parser = argparse.ArgumentParser(
+        description="View a strategic report JSON file in a formatted way.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "report_file",
+        type=str,
+        help="Path to the strategic_report_...json file."
+    )
+
+    args = parser.parse_args()
+    display_report(args.report_file) 

@@ -4,12 +4,18 @@ import os
 import time # 시간 지연을 위해 time 모듈 추가
 import argparse # 인자 처리를 위해 추가
 from glob import glob
+
+def remove_think_tags(text: str) -> str:
+    """<think> 태그를 제거합니다."""
+    think_pattern = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+    return think_pattern.sub("", text).strip()
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import PromptTemplate
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain.agents import Tool, create_react_agent, AgentExecutor
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough
+import sys
 
 # --- 1. LLM 및 도구 설정 ---
 llm = ChatOllama(
@@ -269,8 +275,7 @@ def process_single_file(swot_file):
             research_result = researcher_agent.invoke({"input": swot_input_string})
             output_text = research_result.get('output', '')
 
-            think_pattern = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
-            cleaned_output = think_pattern.sub("", output_text).strip()
+            cleaned_output = remove_think_tags(output_text)
 
             json_match = re.search(r'\[.*\]', cleaned_output, re.DOTALL)
             if not json_match:
@@ -301,7 +306,14 @@ def process_single_file(swot_file):
     print("\n🤖 [Phase 2/4] Starting Validator to check data quality...")
     validated_info = []
     try:
-        validated_info = validator_chain.invoke({"research_findings": json.dumps(gathered_info, ensure_ascii=False)})
+        validator_result = validator_chain.invoke({"research_findings": json.dumps(gathered_info, ensure_ascii=False)})
+        if isinstance(validator_result, str):
+            # JSON 문자열인 경우 think 태그 제거 후 파싱
+            cleaned_result = remove_think_tags(validator_result)
+            validated_info = json.loads(cleaned_result)
+        else:
+            validated_info = validator_result
+            
         if not isinstance(validated_info, list):
              print(f"⚠️ Validator did not return a list, using original data. Output: {validated_info}")
              validated_info = gathered_info
@@ -328,7 +340,14 @@ def process_single_file(swot_file):
         
         try:
             print(f"  - Summarizing snippet for category '{info.get('category')}'...")
-            summary_json = summarizer_chain.invoke({"article_text": info['snippet']})
+            summary_result = summarizer_chain.invoke({"article_text": info['snippet']})
+            
+            # JSON 문자열인 경우 think 태그 제거 후 파싱
+            if isinstance(summary_result, str):
+                cleaned_summary = remove_think_tags(summary_result)
+                summary_json = json.loads(cleaned_summary)
+            else:
+                summary_json = summary_result
             
             densest_summary = summary_json[-1]['Denser_Summary']
             
@@ -361,8 +380,7 @@ def process_single_file(swot_file):
         "research_data": research_data_str
     })
     
-    think_pattern = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
-    final_report = think_pattern.sub("", final_report_raw).strip()
+    final_report = remove_think_tags(final_report_raw)
 
     print("\n" + "="*30)
     print("✅ 최종 분석 보고서 (Advanced Deep Research)")
@@ -370,6 +388,9 @@ def process_single_file(swot_file):
     print(final_report)
 
     # --- 4. 결과 저장 ---
+    # bm_result 디렉토리 생성
+    os.makedirs('bm_result', exist_ok=True)
+    
     report_data = {
         "source_swot_file": swot_file,
         "gathered_information": gathered_info,
@@ -379,12 +400,14 @@ def process_single_file(swot_file):
     
     base_name = os.path.basename(swot_file)
     identifier = base_name.replace('_swot_analysis', '').replace('.json', '')
-    output_path = f'result/advanced_deep_research_report_{identifier}.json'
+    output_path = f'bm_result/advanced_deep_research_report_{identifier}.json'
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(report_data, f, ensure_ascii=False, indent=4)
-    
-    print(f"\n✅ 최종 보고서가 {output_path} 에 성공적으로 저장되었습니다.")
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(report_data, f, ensure_ascii=False, indent=4)
+        print(f"\n✅ 최종 보고서가 {output_path} 에 성공적으로 저장되었습니다.")
+    except Exception as e:
+        print(f"🚨 ERROR: Failed to save report to {output_path}: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run advanced deep research on a single SWOT analysis file.")
@@ -393,5 +416,10 @@ if __name__ == "__main__":
     
     if not os.path.exists(args.swot_file):
         print(f"🚨 ERROR: Input file not found at '{args.swot_file}'")
+        sys.exit(1)
     else:
-        process_single_file(args.swot_file) 
+        try:
+            process_single_file(args.swot_file)
+        except Exception as e:
+            print(f"🚨 ERROR: An unexpected error occurred: {e}")
+            sys.exit(1) 

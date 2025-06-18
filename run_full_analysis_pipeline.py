@@ -8,9 +8,9 @@ from glob import glob
 # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 설정 부분 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 #
 # 분석하고 싶은 SWOT 분석 파일의 경로를 여기에 입력하세요.
-# 예시: './result/델타엑스_swot_analysis_20250611_155431.json'
+# 예시: 'result/델타엑스_swot_analysis_20250611_155431.json'
 #
-INPUT_SWOT_FILE = './result/ROBOS_swot_analysis_20250611_163629.json'
+INPUT_SWOT_FILE = 'result/ROBOS_swot_analysis_20250611_163629.json'
 #
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 설정 부분 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 # ==============================================================================
@@ -36,6 +36,9 @@ def run_script(script_name, arguments):
     except FileNotFoundError:
         print(f"🚨🚨🚨 ERROR: Script '{script_name}' not found. Make sure it's in the same directory. 🚨🚨🚨")
         return False
+    except Exception as e:
+        print(f"🚨🚨🚨 ERROR: Unexpected error running {script_name}: {e} 🚨🚨🚨")
+        return False
     return True
 
 def get_identifier_from_swot(swot_file_path):
@@ -51,62 +54,99 @@ def main(swot_file_path):
     1. Advanced Deep Research
     2. Competitive Analysis
     3. Lean Canvas Extraction
+    4. Strategic Report Generation
     """
+    
+    # bm_result 디렉토리 생성
+    os.makedirs('bm_result', exist_ok=True)
     
     # 입력된 SWOT 파일이 실제로 존재하는지 확인
     if not os.path.exists(swot_file_path):
         print(f"🚨 ERROR: Input SWOT file not found at '{swot_file_path}'")
-        return
+        print(f"�� TIP: Make sure the SWOT analysis file exists in the result directory")
+        print(f"       Analysis results will be saved to the bm_result directory")
+        return False
 
     print(f"🚀 Starting full analysis pipeline for: {swot_file_path}")
     
     # SWOT 파일에서 식별자 추출
-    identifier = get_identifier_from_swot(swot_file_path)
+    try:
+        identifier = get_identifier_from_swot(swot_file_path)
+        print(f"📝 Extracted identifier: {identifier}")
+    except Exception as e:
+        print(f"🚨 ERROR: Failed to extract identifier from {swot_file_path}: {e}")
+        return False
 
     # --- 단계 1: Advanced Deep Research 실행 ---
     print("\n--- STAGE 1: Advanced Deep Research ---")
     if not run_script('advanced_deep_research.py', [swot_file_path]):
-        return
+        print("🚨 Stage 1 failed. Stopping pipeline.")
+        return False
     
     # 1단계의 결과물 경로를 구성합니다.
-    adv_report_path = f'./result/advanced_deep_research_report_{identifier}.json'
+    adv_report_path = f'bm_result/advanced_deep_research_report_{identifier}.json'
     if not os.path.exists(adv_report_path):
         print(f"🚨 ERROR: Stage 1 did not produce the expected output file: {adv_report_path}")
-        return
+        return False
     print(f"✅ Stage 1 completed. Output: {adv_report_path}")
-
 
     # --- 단계 2: Competitive Analysis 실행 ---
     print("\n--- STAGE 2: Competitive Analysis ---")
     if not run_script('competitive_analysis.py', [adv_report_path]):
-        return
+        print("🚨 Stage 2 failed. Stopping pipeline.")
+        return False
 
     # 2단계의 결과물 경로를 구성합니다.
-    comp_report_path = f'./result/competitive_analysis_report_{identifier}.json'
+    comp_report_path = f'bm_result/competitive_analysis_report_{identifier}.json'
     if not os.path.exists(comp_report_path):
         print(f"🚨 ERROR: Stage 2 did not produce the expected output file: {comp_report_path}")
-        return
+        return False
     print(f"✅ Stage 2 completed. Output: {comp_report_path}")
-    
 
     # --- 단계 3: Lean Canvas Extraction 실행 ---
     print("\n--- STAGE 3: Lean Canvas Extraction ---")
     if not run_script('extract_lean_canvas.py', [comp_report_path]):
-        return
+        print("🚨 Stage 3 failed. Stopping pipeline.")
+        return False
     
-    # 3단계의 결과물 경로를 구성합니다.
-    lean_canvas_path = f'./result/lean_canvas_{identifier}.json'
+    lean_canvas_path = f'bm_result/lean_canvas_{identifier}.json'
     if not os.path.exists(lean_canvas_path):
         print(f"🚨 ERROR: Stage 3 did not produce the expected output file: {lean_canvas_path}")
-        return
+        return False
     print(f"✅ Stage 3 completed. Output: {lean_canvas_path}")
 
-    print("\n\n🎉🎉🎉 Full analysis pipeline completed successfully! 🎉🎉🎉")
-    print(f"Final output is located at: {lean_canvas_path}")
+    # --- 단계 4: Strategic Report Generation ---
+    print("\n--- STAGE 4: Strategic Report Generation ---")
+    # 4단계 스크립트는 파일 경로 대신 identifier를 인자로 받습니다.
+    if not run_script('generate_strategic_report.py', [identifier]):
+        print("🚨 Stage 4 failed. Stopping pipeline.")
+        return False
+    
+    # 4단계의 결과물 경로를 구성합니다.
+    strategic_report_path = f'bm_result/strategic_report_{identifier}.json'
+    if not os.path.exists(strategic_report_path):
+        print(f"🚨 ERROR: Stage 4 did not produce the expected output file: {strategic_report_path}")
+        return False
+    print(f"✅ Stage 4 completed. Output: {strategic_report_path}")
 
+    print("\n\n🎉🎉🎉 Full analysis pipeline completed successfully! 🎉🎉🎉")
+    print(f"📁 All outputs are located in the bm_result/ directory:")
+    print(f"   - Initial research: {adv_report_path}")
+    print(f"   - Competitive analysis: {comp_report_path}")
+    print(f"   - Lean Canvas: {lean_canvas_path}")
+    print(f"   - Final strategic report: {strategic_report_path}")
+    return True
 
 if __name__ == "__main__":
     if not INPUT_SWOT_FILE or INPUT_SWOT_FILE == ' 여기에 경로 입력 ':
         print("🚨 Please set the 'INPUT_SWOT_FILE' variable at the top of the script before running.")
+        sys.exit(1)
     else:
-        main(INPUT_SWOT_FILE) 
+        try:
+            success = main(INPUT_SWOT_FILE)
+            if not success:
+                print("\n🚨 Pipeline execution failed. Please check the error messages above.")
+                sys.exit(1)
+        except Exception as e:
+            print(f"\n🚨 ERROR: An unexpected error occurred: {e}")
+            sys.exit(1) 

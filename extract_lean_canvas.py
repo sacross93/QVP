@@ -2,10 +2,12 @@ import json
 import re
 import os
 import argparse # 인자 처리를 위해 추가
+import sys
 from glob import glob
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_core.runnables import RunnableLambda
 
 # --- 1. LLM 설정 ---
 llm = ChatOllama(
@@ -13,6 +15,11 @@ llm = ChatOllama(
     base_url="http://192.168.120.102:11434",
     temperature=0
 )
+
+def remove_think_tags(text: str) -> str:
+    """<think> 태그를 제거합니다."""
+    think_pattern = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+    return think_pattern.sub("", text).strip()
 
 # --- 2. Lean Canvas 추출 체인 생성 ---
 
@@ -59,16 +66,11 @@ please write in korean.
 ```
 """
     prompt = PromptTemplate.from_template(prompt_template)
-    # LLM의 출력을 문자열로 받기 위해 StrOutputParser 사용
-    return prompt | llm | StrOutputParser()
+    parser = StrOutputParser() | RunnableLambda(remove_think_tags) | JsonOutputParser()
+    return prompt | llm | parser
 
 def process_single_report(report_file):
     """단일 보고서 파일에서 Lean Canvas를 추출하는 메인 로직"""
-    llm = ChatOllama(
-        model="qwen3:32b",
-        base_url="http://192.168.120.102:11434",
-        temperature=0
-    )
     extractor_chain = create_extractor_chain(llm)
 
     print(f"\n\n{'='*50}\nProcessing file: {report_file}\n{'='*50}")
@@ -87,25 +89,22 @@ def process_single_report(report_file):
 
     print("🤖 Starting Lean Canvas extraction...")
     try:
-        raw_output = extractor_chain.invoke({"report_text": report_text})
-        think_pattern = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
-        cleaned_output = think_pattern.sub("", raw_output).strip()
-        json_match = re.search(r'\{.*\}', cleaned_output, re.DOTALL)
-        if not json_match:
-            raise json.JSONDecodeError("No JSON object found in the cleaned output", cleaned_output, 0)
-        json_string = json_match.group(0)
-        lean_canvas_json = json.loads(json_string)
-        
+        lean_canvas_json = extractor_chain.invoke({"report_text": report_text})
         print("✅ Lean Canvas data extracted successfully.")
 
+        # bm_result 디렉토리 생성
+        os.makedirs('bm_result', exist_ok=True)
+        
         base_name = os.path.basename(report_file)
         identifier = base_name.replace('competitive_analysis_report_', '').replace('.json', '')
-        output_path = f'result/lean_canvas_{identifier}.json'
+        output_path = f'bm_result/lean_canvas_{identifier}.json'
 
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(lean_canvas_json, f, ensure_ascii=False, indent=4)
-        
-        print(f"✅ Lean Canvas JSON saved to: {output_path}")
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(lean_canvas_json, f, ensure_ascii=False, indent=4)
+            print(f"✅ Lean Canvas JSON saved to: {output_path}")
+        except Exception as e:
+            print(f"🚨 ERROR: Failed to save Lean Canvas to {output_path}: {e}")
 
     except Exception as e:
         print(f"🚨 An error occurred during the extraction process: {e}")
@@ -117,5 +116,10 @@ if __name__ == "__main__":
     
     if not os.path.exists(args.report_file):
         print(f"🚨 ERROR: Input file not found at '{args.report_file}'")
+        sys.exit(1)
     else:
-        process_single_report(args.report_file) 
+        try:
+            process_single_report(args.report_file)
+        except Exception as e:
+            print(f"🚨 ERROR: An unexpected error occurred: {e}")
+            sys.exit(1) 

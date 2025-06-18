@@ -3,6 +3,7 @@ import re
 import os
 import time
 import argparse # 인자 처리를 위해 추가
+import sys
 from glob import glob
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import PromptTemplate
@@ -247,6 +248,10 @@ def process_single_report(report_file):
 
     # --- 단계 4: 결과 저장 ---
     print("\n🤖 [Phase 4/4] Saving the final report...")
+    
+    # bm_result 디렉토리 생성
+    os.makedirs('bm_result', exist_ok=True)
+    
     final_data = {
         "source_report_file": report_file,
         "research_plan": task_list,
@@ -256,12 +261,14 @@ def process_single_report(report_file):
 
     base_name = os.path.basename(report_file)
     identifier = base_name.replace('advanced_deep_research_report_', '').replace('.json', '')
-    output_path = f'result/competitive_analysis_report_{identifier}.json'
+    output_path = f'bm_result/competitive_analysis_report_{identifier}.json'
 
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(final_data, f, ensure_ascii=False, indent=4)
-    
-    print(f"\n✅ 최종 보고서가 {output_path} 에 성공적으로 저장되었습니다.")
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(final_data, f, ensure_ascii=False, indent=4)
+        print(f"\n✅ 최종 보고서가 {output_path} 에 성공적으로 저장되었습니다.")
+    except Exception as e:
+        print(f"🚨 ERROR: Failed to save report to {output_path}: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run competitive analysis on a single report file.")
@@ -270,5 +277,10 @@ if __name__ == "__main__":
     
     if not os.path.exists(args.report_file):
         print(f"🚨 ERROR: Input file not found at '{args.report_file}'")
+        sys.exit(1)
     else:
-        process_single_report(args.report_file) 
+        try:
+            process_single_report(args.report_file)
+        except Exception as e:
+            print(f"🚨 ERROR: An unexpected error occurred: {e}")
+            sys.exit(1) 
