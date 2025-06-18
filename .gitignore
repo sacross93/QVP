@@ -181,5 +181,6 @@ cython_debug/
 /prompt/*
 /result
 /result/*
-
+/bm_result/*
+/bm_result
 
