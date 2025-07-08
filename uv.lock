@@ -473,6 +473,9 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.5" },
 ]
 
+[package.metadata.requires-dev]
+dev = []
+
 [[package]]
 name = "requests"
 version = "2.32.3"

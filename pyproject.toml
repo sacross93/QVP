@@ -9,3 +9,9 @@ dependencies = [
     "langgraph>=0.4.7",
     "pydantic>=2.11.5",
 ]
+
+[project.scripts]
+analyze-ipo = "analyze_ipo_viability:main"
+
+[tool.uv]
+dev-dependencies = []
