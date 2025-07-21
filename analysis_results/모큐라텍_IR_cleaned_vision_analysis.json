@@ -1,0 +1,87 @@
+{
+  "file_info": {
+    "path": "vision_txt/모큐라텍_IR_cleaned.md"
+  },
+  "analysis_result": {
+    "회사 개요": {
+      "corporation_name": "",
+      "foundation_date": "",
+      "ceo": "",
+      "main_business": "",
+      "locations": [],
+      "history_milestones": []
+    },
+    "재무 현황": {
+      "financial_summary": [],
+      "funding_history": "Seed Money: 7억 원 규모의 초기 투자 유치 완료.\nSeries B: 2,800만 달러 규모의 투자 확보 (투자자: LG Technology Ventures, Edison International, Prelude Ventures, Radar Partners, 투자 일시: 22.12.14 기준).",
+      "financial_plan": "2024년 상반기 투자 유치 노력 및 사업 확장 및 글로벌 진출을 위한 추가 투자 필요."
+    },
+    "기술 및 제품": {
+      "error": "LLM 출력에서 JSON을 찾지 못함"
+    },
+    "사업 및 시장 전략": {
+      "target_market": "신재생 연계 ESS 시장(유효시장 68조원, 수익시장 21조원) 및 민간분야 배터리시장(유효시장 367조원, 수익시장 245조원)으로, 태양광/풍력/원자력 및 전기차(배터리리스사업, 충전소 등)에 적용",
+      "competitors": [
+        "LG Energy Solution",
+        "DL E&C",
+        "SK ecoplant",
+        "POEN",
+        "KAON",
+        "한국전력공사",
+        "KETI",
+        "삼성SDI",
+        "LG 에너솔루션",
+        "SK 온",
+        "HYUNDAI",
+        "KIA",
+        "TESLA",
+        "한국산업기술시험원",
+        "BYD",
+        "ICEPCO",
+        "IDL E&C",
+        "Kokam",
+        "WONIK PNE",
+        "PAKERS"
+      ],
+      "business_model": "정부주도형 사업(B to G)으로 신재생에너지 사업을 중심으로 BBM (ESS) 시스템을 활용한 R-ESS 제조 및 유지 관리, 민간사업(B to B)으로 전기차 및 재사용 배터리 제품에 배터리 재생기 기술을 활용한 서비스 확장",
+      "scale_up_strategy": "정부주도형 사업에서 축적한 기술과 경험을 바탕으로 민간사업으로 확장하며, 합작 법인 설립을 통해 사업화를 추진하고, 해외 시장 및 건설 현장, 아파트/주택 전기 사용 대체 분야로 ESS 적용을 확대"
+    }
+  },
+  "debug_info": {
+    "total_chunks": 79,
+    "grouped_headers": {
+      "회사 개요": [
+        "# 재사용 이차전지 분야의 안전 및 유지관리 통합솔루션 제공 기업"
+      ],
+      "경영진 및 조직": [],
+      "재무 현황": [
+        "# 향후 투자 계획",
+        "# 미국 유사 기업과 비교",
+        "# 2023년 사업 성과 – SEED 투자유치",
+        "# 2023년 사업 성과 – TIPS 선정"
+      ],
+      "기술 및 제품": [
+        "# TECH & PRODUCT",
+        "# 1. Li-ion 배터리의 열화 과정 및 SOH 판별 방법",
+        "# 2. ESS 빅데이터를 활용한 배터리 성능 최적화 및 화재 예방을 위한 지능형 ESS 개발",
+        "# 3. ANN을 이용한 리튬이온 배터리의 SOH 예측기법 연구",
+        "# 4. LSTM 모델기반 리튬이온 배터리 SOH 예측알고리즘",
+        "# 2023년 사업 성과 – 2024 CES 혁신상 및 에디슨 어워즈 수상"
+      ],
+      "사업 및 시장 전략": [
+        "# BUSINESS PLAN",
+        "# 사업 모델",
+        "# 사업아이템 적용 및 고객사",
+        "# 주요매출 및 사업화 진행사항",
+        "# 사업화 연계제도 및 전략",
+        "# 실증 사업 – KEPCO & KPS",
+        "# SI를 통한 사업화전략"
+      ],
+      "기타": [
+        "# 방산용 이차전지 1.63kW용량 Li-juvenerator 성능확인(창업배경)",
+        "# 참고자료",
+        "# 2023년 사업 성과 – 2024 CES 혁신상 및 에디슨 어워즈 수상"
+      ]
+    }
+  }
+}

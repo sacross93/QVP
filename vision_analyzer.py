@@ -120,28 +120,203 @@ class VisionMDAnalyzer:
         if not self.use_llm: return {}
         logger.info("3-1단계: 주제별 그룹화 시작...")
         summaries_text = "\n".join(f"- 헤더: {chunk['header']}\n  요약: {chunk.get('summary', '')}" for chunk in indexed_chunks if chunk.get('summary'))
-        template = """당신은 투자 분석가입니다. 다음은 한 IR 문서의 섹션별 요약 리스트입니다. 각 섹션의 '헤더'를 읽고, 아래 6가지 주제 중 가장 적합한 주제로 분류해주세요. 결과는 반드시 JSON 형식으로만 반환해주세요. 예시: {{"회사 개요": ["헤더1", "헤더2"], "경영진 및 조직": ["헤더3"]}}\n\n**분류할 주제:**\n["회사 개요", "경영진 및 조직", "재무 현황", "기술 및 제품", "사업 및 시장 전략", "기타"]\n\n**섹션별 요약 리스트:**\n---\n{summaries}\n---\n\n**JSON 출력:**\n/no_think\n"""
+        template = """당신은 투자 분석가입니다. 다음은 한 IR 문서의 섹션별 헤더와 요약 리스트입니다. 각 헤더를 아래 6가지 주제로 분류해주세요.
+
+**분류 기준:**
+- 회사 개요: 회사명, 설립일, 대표자, 사업 분야, 회사 소개, 연락처
+- 경영진 및 조직: 팀 구성원, 경영진 프로필, 조직도
+- 재무 현황: 매출, 투자금, 자금 계획, 재무 지표
+- 기술 및 제품: 핵심 기술, 제품 라인업, 특허, 임상시험, 검사 기술
+- 사업 및 시장 전략: 시장 분석, 경쟁사, 비즈니스 모델, 글로벌 진출
+- 기타: 위 카테고리에 맞지 않는 내용
+
+**섹션별 헤더 리스트:**
+---
+{summaries}
+---
+
+**중요: 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요:**
+{{
+  "회사 개요": ["헤더1", "헤더2"],
+  "경영진 및 조직": ["헤더3"],
+  "재무 현황": ["헤더4"],
+  "기술 및 제품": ["헤더5"],
+  "사업 및 시장 전략": ["헤더6"],
+  "기타": ["헤더7"]
+}}
+
+/no_think
+"""
         prompt = PromptTemplate.from_template(template)
         chain = prompt | self.llm | StrOutputParser()
         all_keys = ["회사 개요", "경영진 및 조직", "재무 현황", "기술 및 제품", "사업 및 시장 전략", "기타"]
         final_groups = {key: [] for key in all_keys}
         try:
+            logger.info(f"주제별 그룹화를 위해 {len(indexed_chunks)}개 섹션 처리 중...")
             raw_output = chain.invoke({"summaries": summaries_text})
+            logger.info(f"LLM 응답 길이: {len(raw_output)} 문자")
+            
             response_data = self._clean_and_parse_json(raw_output)
             
             if isinstance(response_data, dict):
                 for key, value in response_data.items():
                     if key in final_groups and isinstance(value, list):
                         final_groups[key].extend(value)
+                        logger.info(f"주제 '{key}': {len(value)}개 헤더 할당")
+                total_assigned = sum(len(headers) for headers in final_groups.values())
+                logger.info(f"총 {total_assigned}개 헤더가 주제별로 할당됨")
+            else:
+                logger.error(f"JSON 파싱 실패. 폴백 분류 시도...")
+                final_groups = self._fallback_grouping(indexed_chunks)
+                
+            # 결과 검증
+            if all(not headers for headers in final_groups.values()):
+                logger.error("모든 주제가 비어있음. 폴백 분류 시도...")
+                final_groups = self._fallback_grouping(indexed_chunks)
+                
             logger.info("주제별 그룹화 완료.")
         except Exception as e:
-            logger.error(f"주제별 그룹화 중 예외 발생: {e}. 빈 그룹을 반환합니다.")
+            logger.error(f"주제별 그룹화 중 예외 발생: {e}. 폴백 분류 시도...")
+            final_groups = self._fallback_grouping(indexed_chunks)
+            
+        return final_groups
+
+    def _fallback_grouping(self, indexed_chunks: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+        """키워드 기반 폴백 그룹화"""
+        logger.info("키워드 기반 폴백 그룹화 시작...")
+        
+        # 주제별 키워드 매핑 (개선된 버전)
+        keyword_mapping = {
+            "회사 개요": ["회사", "십일리터", "주식회사", "개요", "소개", "연락처", "대표", "설립", "본사", "위치", "lifet", "robos", "로보스", "일반 현황", "창업기업"],
+            "경영진 및 조직": ["팀", "경영진", "ceo", "cto", "coo", "cfo", "대표", "조직", "구성원", "임원", "직원", "팀 구성원", "본부장", "연구원", "책임", "선임", "마케터", "디자이너", "개발자", "수의사", "director"],
+            "재무 현황": ["매출", "투자", "자금", "재무", "수익", "비용", "투자금", "계획", "예산", "billion", "million", "억", "만", "원"],
+            "기술 및 제품": ["기술", "제품", "ai", "검사", "진단", "특허", "개발", "임상", "시험", "정확도", "알고리즘", "vision", "로봇", "자동화", "머신비전", "딥러닝", "생체", "도축"],
+            "사업 및 시장 전략": ["시장", "사업", "전략", "경쟁", "글로벌", "진출", "홈케어", "반려동물", "펫", "비즈니스", "확대", "스케일업", "사업화", "도축장", "규모"],
+            "기타": ["chapter", "부록", "참고", "기타", "상세", "추가", "문제점", "해결방안"]
+        }
+        
+        all_keys = ["회사 개요", "경영진 및 조직", "재무 현황", "기술 및 제품", "사업 및 시장 전략", "기타"]
+        final_groups = {key: [] for key in all_keys}
+        
+        for chunk in indexed_chunks:
+            header = chunk['header'].lower()
+            summary = chunk.get('summary', '').lower()
+            content = f"{header} {summary}"
+            
+            assigned = False
+            for theme, keywords in keyword_mapping.items():
+                if any(keyword in content for keyword in keywords):
+                    final_groups[theme].append(chunk['header'])
+                    assigned = True
+                    break
+            
+            if not assigned:
+                final_groups["기타"].append(chunk['header'])
+        
+        total_assigned = sum(len(headers) for headers in final_groups.values())
+        logger.info(f"폴백 그룹화 완료: 총 {total_assigned}개 헤더 할당")
         return final_groups
 
     def _extract_detailed_info(self, grouped_headers: Dict[str, List[str]], original_chunks: List[Dict[str, str]]) -> Dict[str, Any]:
         if not self.use_llm: return {}
         logger.info("3-2단계: 주제별 심층 정보 추출 시작...")
         chunk_map = {chunk['header']: chunk['content'] for chunk in original_chunks}
+        
+        # 헤더 매칭을 위한 포괄적 검색 함수
+        def find_matching_content(target_header: str) -> str:
+            """주어진 헤더에 대해 가장 유사한 내용을 찾고 관련 정보를 통합하는 함수"""
+            logger.info(f"헤더 매칭 시작: '{target_header}'")
+            
+            # 주제별 키워드 정의 (범용적 패턴)
+            theme_keywords = {
+                "경영진": ["경영진", "팀", "구성원", "조직", "창업자", "대표", "이사", "전무", "팀장", 
+                         "ceo", "cto", "cfo", "coo", "임원", "직원", "founder", "team", "member", "organization"],
+                "회사개요": ["회사", "개요", "소개", "설립", "법인", "company", "overview", "정보", "who we are"],
+                "재무": ["매출", "투자", "자금", "재무", "주주", "지분", "유치", "financial", "revenue", "funding", "seed", "series"],
+                "기술": ["기술", "제품", "특허", "개발", "솔루션", "기술력", "technology", "product", "patent"],
+                "사업": ["사업", "시장", "전략", "비즈니스", "고객", "파트너", "business", "market", "strategy"]
+            }
+            
+            # 1. 정확한 매칭 시도
+            if target_header in chunk_map:
+                logger.info(f"정확한 매칭 발견: {target_header} (길이: {len(chunk_map[target_header])})")
+                return chunk_map[target_header]
+            
+            # 2. 부분 매칭 시도 (소문자로 변환하여 비교)
+            target_lower = target_header.lower().strip()
+            for header, content in chunk_map.items():
+                if target_lower in header.lower() or header.lower() in target_lower:
+                    return content
+            
+            # 3. 키워드 매칭 시도
+            target_keywords = target_header.lower().replace('#', '').replace('-', '').split()
+            target_keywords = [kw.strip() for kw in target_keywords if kw.strip()]
+            
+            for header, content in chunk_map.items():
+                header_lower = header.lower()
+                if any(keyword in header_lower for keyword in target_keywords):
+                    return content
+            
+            # 4. 주제별 통합 검색 (경영진/팀 정보에 특화)
+            current_theme = None
+            for theme, keywords in theme_keywords.items():
+                if any(kw in target_lower for kw in keywords):
+                    current_theme = theme
+                    break
+            
+            logger.info(f"대상 헤더: {target_header}, 감지된 테마: {current_theme}")
+            
+            if current_theme:
+                matching_contents = []
+                theme_keywords_list = theme_keywords[current_theme]
+                
+                # 모든 관련 섹션을 찾아서 통합
+                for header, content in chunk_map.items():
+                    header_lower = header.lower()
+                    if any(kw in header_lower for kw in theme_keywords_list):
+                        # 내용이 의미있는지 확인 (단순 제목이 아닌)
+                        if content and len(content.strip()) > 50:
+                            matching_contents.append(content)
+                
+                # 특별히 경영진 정보의 경우, 더 세밀한 검색 수행
+                if "경영진" in current_theme:
+                    logger.info(f"경영진 테마 감지: {current_theme}, 세밀한 검색 시작...")
+                    
+                    # 구조적 패턴 인식: #### 이름 직책 형태
+                    position_patterns = ["대표이사", "전무", "이사", "팀장", "ceo", "cto", "cfo", "coo"]
+                    for header, content in chunk_map.items():
+                        # 레벨 4 헤더에서 직책 패턴 검색
+                        if header.startswith("#### ") and any(pos in header.lower() for pos in position_patterns):
+                            if content and len(content.strip()) > 20:  # 짧은 프로필도 허용
+                                logger.info(f"직책 패턴 매칭: {header} (길이: {len(content)})")
+                                if content not in matching_contents:
+                                    matching_contents.append(content)
+                    
+                    # 기존 패턴 검색
+                    specific_patterns = ["팀 구성원", "조직 구성", "구성원", "경영진", "organization", "team member", "주주"]
+                    for pattern in specific_patterns:
+                        for header, content in chunk_map.items():
+                            if pattern in header.lower() and content and len(content.strip()) > 100:
+                                logger.info(f"패턴 '{pattern}' 매칭: {header} (길이: {len(content)})")
+                                if content not in matching_contents:
+                                    matching_contents.append(content)
+                    
+                    # 다층 헤더 확인 (레벨 2-3)
+                    for header, content in chunk_map.items():
+                        if (header.startswith("## ") or header.startswith("### ")) and \
+                           any(kw in header.lower() for kw in ["팀", "구성원", "조직", "경영진", "주주"]) and \
+                           content and len(content.strip()) > 50:
+                            logger.info(f"다층 헤더 매칭: {header} (길이: {len(content)})")
+                            if content not in matching_contents:
+                                matching_contents.append(content)
+                    
+                    logger.info(f"경영진 세밀 검색 완료: {len(matching_contents)}개 컨텐츠 발견")
+                
+                # 여러 섹션의 내용을 통합
+                if matching_contents:
+                    return "\n\n---\n\n".join(matching_contents)
+            
+            return ""
         extraction_prompts = {
             "회사 개요": """당신은 주어진 텍스트에서 정보를 추출하여 JSON 형식으로만 반환하는 AI입니다. 절대로 요약이나 설명을 생성하지 마시오.
 응답은 아래에 명시된 JSON 스키마를 반드시 준수해야 합니다.
@@ -153,6 +328,11 @@ class VisionMDAnalyzer:
 - 주요 사업 분야 (main_business)
 - 본사 및 주요 시설 위치 (locations)
 - 회사 연혁의 주요 마일스톤 (history_milestones)
+
+**중요: 분산된 정보 통합 가이드:**
+- "WHO WE ARE", "회사 정보", "법인설립" 등 다양한 섹션에서 정보를 찾으세요
+- 연혁 테이블이나 리스트에서 설립일과 주요 이벤트를 추출하세요
+- 회사 소개글에서 사업 분야와 위치 정보를 파악하세요
 
 **분석할 텍스트:**
 ```{context}```
@@ -178,6 +358,12 @@ class VisionMDAnalyzer:
 
 **추출할 정보:**
 - 각 경영진의 이름(name), 직책(position), 최종 학력(education), 주요 경력(career). 모든 인물을 빠짐없이 포함해야 합니다.
+
+**중요: 다양한 형식 처리 가이드:**
+- "#### 박호영 대표이사" 형태의 헤더에서 이름과 직책을 분리하세요
+- 마크다운 테이블이 있다면 각 행의 정보를 개별 인물로 추출하세요
+- 주주 정보 테이블에서도 경영진 관련 정보를 찾아 포함하세요
+- 짧은 프로필이라도 이름과 직책이 명확하면 포함하세요
 
 **분석할 텍스트:**
 ```{context}```
@@ -241,6 +427,12 @@ class VisionMDAnalyzer:
 **추출할 정보:**
 - 핵심 기술, 보유 특허, 주요 제품 라인업, 기술적 경쟁 우위.
 
+**중요: 기술 추출 가이드:**
+- AI 검사, 진단 기술, Vision AI 등의 핵심 기술을 찾아 포함하세요
+- "슬개골 탈구 AI 검사", "치주 질환 AI 검사" 등 구체적인 기술명을 포함하세요
+- 정확도, 의료기기 허가 상태 등 기술적 특징을 함께 기록하세요
+- 제품명과 서비스명을 구분하여 기록하세요 (예: "라이펫 앱", "API 서비스" 등)
+
 **분석할 텍스트:**
 ```{context}```
 
@@ -248,7 +440,7 @@ class VisionMDAnalyzer:
 ```json
 {{
     "properties": {{
-        "core_technologies": {{"type": "array", "items": {{"type": "string"}}, "description": "핵심 기술 목록"}},
+        "core_technologies": {{"type": "array", "items": {{"type": "string"}}, "description": "핵심 기술 목록 - 구체적인 기술명과 특징 포함"}},
         "patents": {{"type": "array", "items": {{"type": "string"}}, "description": "보유 특허 목록"}},
         "product_lineup": {{"type": "array", "items": {{"type": "string"}}, "description": "주요 제품 및 서비스 라인업"}},
         "tech_advantage": {{"type": "string", "description": "경쟁사 대비 기술적 우위 요약"}}
@@ -262,6 +454,11 @@ class VisionMDAnalyzer:
 **추출할 정보:**
 - 타겟 시장, 주요 경쟁사, 비즈니스 모델, 향후 확장 전략.
 
+**중요: 경쟁사 추출 가이드:**
+- 텍스트에 표(table) 형태로 된 경쟁사 정보가 있을 경우, 모든 기업명을 추출하세요
+- "주요 반려동물 진단기업", "경쟁사", "competitor" 등의 키워드 주변 정보를 주의깊게 확인하세요
+- 기업명만 추출하고, 서비스명이나 설명은 제외하세요 (예: "피티펫", "그린펫", "엑스칼리버" 등)
+
 **분석할 텍스트:**
 ```{context}```
 
@@ -270,7 +467,7 @@ class VisionMDAnalyzer:
 {{
     "properties": {{
         "target_market": {{"type": "string", "description": "타겟 시장의 규모 및 특징"}},
-        "competitors": {{"type": "array", "items": {{"type": "string"}}, "description": "주요 경쟁사 목록"}},
+        "competitors": {{"type": "array", "items": {{"type": "string"}}, "description": "주요 경쟁사 목록 - 기업명만 포함"}},
         "business_model": {{"type": "string", "description": "비즈니스 모델 및 주요 수익원"}},
         "scale_up_strategy": {{"type": "string", "description": "향후 사업화 또는 확장 전략"}}
     }}
@@ -282,11 +479,81 @@ class VisionMDAnalyzer:
         for theme, headers in grouped_headers.items():
             if theme not in extraction_prompts or not headers: continue
             logger.info(f"  - 심층 분석 중... ({theme})")
-            context = "\n\n---\n\n".join(chunk_map.get(h, '') for h in headers if h in chunk_map)
+            # 컨텍스트 수집 시 추가 검색 로직
+            context_parts = []
+            for h in headers:
+                content = find_matching_content(h)
+                if content:
+                    context_parts.append(content)
+            
+            # 모든 주제에 대해 다층 헤더 및 키워드 기반 추가 검색
+            theme_specific_keywords = {
+                "경영진 및 조직": ["팀", "구성원", "조직", "경영진", "ceo", "cto", "cfo", "coo", "창업자", "대표", "이사", "전무", "팀장", "임원", "직원", "주주"],
+                "기술 및 제품": ["기술", "ai", "검사", "진단", "제품", "vision", "정확도", "알고리즘", "모델", "특허", "개발", "밸런싱", "배터리", "솔루션"],
+                "사업 및 시장 전략": ["시장", "경쟁", "경쟁사", "전략", "비즈니스", "고객", "파트너", "협력"],
+                "재무 현황": ["매출", "투자", "자금", "재무", "billion", "million", "억", "원", "계획", "seed", "series", "주주", "지분", "유치"],
+                "회사 개요": ["회사", "설립", "개요", "소개", "본사", "연락처", "정보", "법인", "who we are"]
+            }
+            
+            if theme in theme_specific_keywords:
+                keywords = theme_specific_keywords[theme]
+                logger.info(f"{theme} 추가 검색 시작 (키워드: {len(keywords)}개)")
+                
+                for chunk_header, chunk_content in chunk_map.items():
+                    # 다층 헤더 검색 (레벨 2-4)
+                    header_level = ""
+                    if chunk_header.startswith("#### "):
+                        header_level = "L4"
+                    elif chunk_header.startswith("### "):
+                        header_level = "L3"
+                    elif chunk_header.startswith("## "):
+                        header_level = "L2"
+                    
+                    # 헤더 레벨별 키워드 매칭
+                    if header_level and any(kw in chunk_header.lower() for kw in keywords):
+                        min_length = 30 if header_level == "L4" else 50  # L4 헤더는 더 짧은 내용도 허용
+                        if chunk_content and len(chunk_content.strip()) > min_length:
+                            logger.info(f"{theme} {header_level} 헤더 발견: {chunk_header} (길이: {len(chunk_content)})")
+                            if chunk_content not in context_parts:
+                                context_parts.append(chunk_content)
+                    
+                    # 일반 키워드 기반 추가 검색 (헤더에 키워드가 포함된 경우)
+                    elif not header_level and any(kw in chunk_header.lower() for kw in keywords):
+                        if chunk_content and len(chunk_content.strip()) > 100:
+                            logger.info(f"{theme} 키워드 매칭: {chunk_header} (길이: {len(chunk_content)})")
+                            if chunk_content not in context_parts:
+                                context_parts.append(chunk_content)
+            
+            # 컨텍스트 품질 기반 정렬 (길이와 구조적 완성도 고려)
+            if context_parts:
+                context_with_scores = []
+                for content in context_parts:
+                    # 품질 점수 계산 (길이 + 구조적 특성)
+                    score = len(content)
+                    if "####" in content:  # 레벨 4 헤더 포함시 가점
+                        score += 100
+                    if "|" in content and "---" in content:  # 테이블 구조 가점
+                        score += 200
+                    context_with_scores.append((content, score))
+                
+                # 점수 순으로 정렬하여 고품질 컨텍스트 우선 배치
+                context_with_scores.sort(key=lambda x: x[1], reverse=True)
+                context_parts = [content for content, score in context_with_scores]
+                
+                logger.info(f"{theme} 컨텍스트 품질 점수: {[score for content, score in context_with_scores]}")
+            
+            context = "\n\n---\n\n".join(context_parts)
             if not context.strip():
                 logger.warning(f"  - '{theme}' 주제에 해당하는 내용이 없어 건너뜁니다.")
+                logger.warning(f"  - 찾으려던 헤더: {headers}")
                 detailed_info[theme] = {}
                 continue
+            
+            # 경영진 및 조직 주제에 대한 추가 디버깅 정보
+            if theme == "경영진 및 조직":
+                logger.info(f"  - 경영진 헤더 목록: {headers}")
+                logger.info(f"  - 추출된 컨텍스트 길이: {len(context)} 문자")
+                logger.info(f"  - 컨텍스트 미리보기: {context[:200]}...")
             template = extraction_prompts[theme]
             prompt = PromptTemplate.from_template(template)
             chain = prompt | self.llm | StrOutputParser()

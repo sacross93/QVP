@@ -184,6 +184,7 @@ cython_debug/
 /bm_result/*
 /bm_result
 /crawlling_data/*
-/analysis_results/*
+# /analysis_results/*
 /chroma_db_bge_m3_ko/*
 
+.env

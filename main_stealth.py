@@ -9,6 +9,10 @@ import logging
 import os
 import random
 from datetime import datetime
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 # Stealth 라이브러리 import (설치 필요: pip install playwright-stealth)
 try:
@@ -906,7 +910,15 @@ class TheVCStealthCrawler:
                 try:
                     element = await self.page.wait_for_selector(selector, timeout=2000)
                     if element:
-                        await element.fill("jgpark@jch.kr")
+                        # 이메일과 비밀번호 환경 변수에서 가져오기
+                        email = os.getenv("THEVC_EMAIL")
+                        password = os.getenv("THEVC_PASSWORD")
+
+                        if not email or not password:
+                            logger.error("❌ .env 파일에 THEVC_EMAIL 또는 THEVC_PASSWORD가 설정되지 않았습니다.")
+                            return False
+                            
+                        await element.fill(email)
                         logger.info(f"✅ 이메일 입력 완료: {selector}")
                         email_filled = True
                         break
@@ -930,7 +942,13 @@ class TheVCStealthCrawler:
                 try:
                     element = await self.page.wait_for_selector(selector, timeout=2000)
                     if element:
-                        await element.fill("jch2025")
+                        # 비밀번호 환경 변수에서 가져오기
+                        password = os.getenv("THEVC_PASSWORD")
+                        if not password:
+                            logger.error("❌ .env 파일에 THEVC_PASSWORD가 설정되지 않았습니다.")
+                            return False
+
+                        await element.fill(password)
                         logger.info(f"✅ 비밀번호 입력 완료: {selector}")
                         password_filled = True
                         break
