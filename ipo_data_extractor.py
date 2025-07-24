@@ -122,18 +122,22 @@ async def main(company_no):
             if company_overview and '회사명' in company_overview:
                 company_name = company_overview.pop('회사명')
 
-            # 재무정보 섹션을 포함하는 더 큰 컨테이너를 먼저 찾음
-            main_container_selector = "//td[.//img[@alt='본질가치분석']]"
-            main_container = await page.wait_for_selector(main_container_selector, timeout=5000)
+            financial_ratios_df = None
+            stock_indicators_df = None
+            try:
+                # 재무정보 섹션을 포함하는 더 큰 컨테이너를 먼저 찾음
+                main_container_selector = "//td[.//img[@alt='본질가치분석']]"
+                main_container = await page.wait_for_selector(main_container_selector, timeout=5000)
 
-            if main_container:
-                # 컨테이너 내부에서 각 테이블을 검색
-                financial_ratios_df = await find_and_extract_table(main_container, "재 무 비 율")
-                stock_indicators_df = await find_and_extract_table(main_container, "주 가 지 표")
-            else:
-                print("재무정보 컨테이너를 찾을 수 없습니다.")
-                financial_ratios_df = None
-                stock_indicators_df = None
+                if main_container:
+                    # 컨테이너 내부에서 각 테이블을 검색
+                    financial_ratios_df = await find_and_extract_table(main_container, "재 무 비 율")
+                    stock_indicators_df = await find_and_extract_table(main_container, "주 가 지 표")
+                else:
+                    print("재무정보 컨테이너를 찾을 수 없습니다.")
+
+            except Exception:
+                print("본질가치분석 테이블을 찾을 수 없어 재무정보 추출을 건너뜁니다.")
 
             # --- 결과 출력 ---
             print("\n\n" + "="*60)
