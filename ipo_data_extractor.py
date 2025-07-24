@@ -11,7 +11,7 @@ Playwright를 사용하여 웹 페이지와 동적으로 상호작용하고, Pan
 uv run python ipo_data_extractor.py --no <기업코드>
 
 예시:
-uv run python ipo_data_extractor.py --no 2194
+uv run python ipo_data_extractor.py --no 2204
 """
 
 import asyncio
@@ -37,7 +37,6 @@ async def extract_key_value_table(page, summary_title):
                         key = (await cells[i].inner_text()).strip()
                         value = (await cells[i+1].inner_text()).strip()
                         if key:
-                            # 복잡한 '공모사항' 키의 중복을 피하고 내용을 합칩니다.
                             if "공모사항" in key and "공모사항" in data:
                                 data["공모사항"] += "\n" + value
                             else:
@@ -104,21 +103,25 @@ async def extract_business_summary(page):
     """'사업현황' 정보를 추출하여 텍스트로 반환합니다."""
     print("--- 사업현황 정보 추출 중 ---")
     try:
-        # '1.사업현황' 텍스트를 포함하는 strong 태그를 찾습니다.
-        summary_element = await page.query_selector("xpath=//strong[contains(text(), '1.사업현황')]")
-        if not summary_element:
-             print("'사업현황' 정보를 찾을 수 없습니다.")
-             return None
+        # '1.사업현황' 텍스트를 포함하는 font 태그를 찾습니다.
+        container_td_selector = "xpath=//td[.//font[contains(text(), '1.사업현황')]]"
+        container_td = await page.query_selector(container_td_selector)
 
-        # strong 태그의 부모의 부모인 td 요소에서 전체 텍스트를 가져옵니다.
-        parent_td = await summary_element.query_selector("xpath=./../..")
-        full_text = await parent_td.inner_text()
+        if not container_td:
+            print("'사업현황' 컨테이너를 찾을 수 없습니다.")
+            return None
+
+        full_text = await container_td.inner_text()
         
-        # '1.사업현황' 부터 '2.매출현황' 전까지의 텍스트를 추출합니다.
-        summary_text = full_text.split('1.사업현황')[1].split('2.매출현황')[0].strip()
-        return summary_text
+        if '1.사업현황' in full_text and '2.매출현황' in full_text:
+            summary_text = full_text.split('1.사업현황')[1].split('2.매출현황')[0].strip()
+            return summary_text
+        else:
+            print("'사업현황' 또는 '매출현황' 마커를 텍스트에서 찾을 수 없습니다.")
+            return None
+
     except TimeoutError:
-        print("'사업현황' 정보를 찾을 수 없습니다.")
+        print("'사업현황' 정보 추출 중 타임아웃 발생.")
         return None
     except Exception as e:
         print(f"사업현황 추출 중 오류 발생: {e}")
@@ -137,7 +140,7 @@ def print_dict_data(title, data):
             if i + 1 < len(items):
                 val2 = str(items[i+1][1]).replace('\n', ' ').replace('\t', ' ')
                 col2 = f"- {items[i+1][0]}: {val2}"
-            print(f"{col1:<45}{col2}")
+            print(f"{col1:<60}{col2}")
     else:
         print(f"\n{title}: 데이터를 추출하지 못했습니다.")
 
@@ -175,9 +178,9 @@ async def main(company_no):
                 print("본질가치분석 테이블을 찾을 수 없어 재무정보 추출을 건너뜁니다.")
 
             # --- 결과 출력 ---
-            print("\n\n" + "="*60)
+            print("\n\n" + "="*70)
             print(f"          {company_name} (종목코드: {company_no}) IPO 데이터 추출 결과")
-            print("="*60)
+            print("="*70)
 
             print_dict_data("1. 기업개요", company_overview)
             print_dict_data("2. 공모정보", offering_info)
@@ -201,7 +204,7 @@ async def main(company_no):
             else:
                 print("\n6. 주가지표: 데이터를 추출하지 못했습니다.")
             
-            print("\n" + "="*60)
+            print("\n" + "="*70)
 
         except Exception as e:
             print(f"스크립트 실행 중 오류가 발생했습니다: {e}")
