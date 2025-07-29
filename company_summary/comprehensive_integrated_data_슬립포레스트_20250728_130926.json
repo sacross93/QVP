@@ -1,0 +1,117 @@
+{
+  "company_name": "슬립포레스트",
+  "innoforest_data": {
+    "keyword": "슬립포레스트",
+    "url": "https://www.innoforest.co.kr/company/CP00021763/%EC%8A%AC%EB%A6%BD%ED%8F%AC%EB%A0%88%EC%8A%A4%ED%8A%B8",
+    "extracted_at": "2025-07-28T13:08:52.332085",
+    "company_name": "슬립포레스트",
+    "page_title": "슬립포레스트(꿀잠닥터) - 매출 투자 고용 정보 - 혁신의숲",
+    "main_info": {
+      "자본": "-",
+      "고용인원": "6명",
+      "누적투자유치금액": "비공개",
+      "투자유치건수": "1",
+      "연매출": "-",
+      "기술등급": "2.0"
+    },
+    "profit_loss": null,
+    "financial": null,
+    "investment": {
+      "summary": {
+        "보유특허 수기업이 보유한 등록 특허수입니다.": "1",
+        "특허기술 평균등급기업이 보유한 등록 특허의 평균 기술등급입니다.": "2.0"
+      },
+      "details": [
+        {
+          "날짜": "2024-09",
+          "투자단계": "지원금",
+          "투자유치금액": "비공개",
+          "투자사": "팁스(TIPS)"
+        },
+        {
+          "날짜": "2024-09",
+          "투자단계": "비공개",
+          "투자유치금액": "비공개",
+          "투자사": "더존비즈온"
+        }
+      ]
+    },
+    "news": [
+      {
+        "link": "https://www.mk.co.kr/news/it/11135622",
+        "category": "일반",
+        "title": "잠 못드는 밤, 수면코칭 앱 켜세요",
+        "source": "매일경제",
+        "date": "2024-10-09"
+      },
+      {
+        "link": "https://www.donga.com/news/It/article/all/20240806/126373210/1",
+        "category": "일반",
+        "title": "[혁신스타트업 in 홍릉] 모든 사람이 잘 자는 세상 꿈꾸는 ‘슬립포레스트’",
+        "source": "동아일보",
+        "date": "2024-08-06"
+      },
+      {
+        "link": "https://magazine.hankyung.com/job-joy/article/202302237547d",
+        "category": "일반",
+        "title": "[2023 경희대학교 캠퍼스타운 스타트업 CEO] 지능형 수면관리 플랫폼 개발하는 스타트업 ‘슬립포레스트’",
+        "source": "매거진한경",
+        "date": "2023-02-24"
+      }
+    ]
+  },
+  "thevc_data": {
+    "company_info": {
+      "company_name": "슬립포레스트",
+      "product_service": "동훈인베스트먼트",
+      "founded_date": "2007년 12월",
+      "company_type": "금융∙기업투자",
+      "ceo": "투자조합",
+      "headquarters": "한국∙서울특별시"
+    },
+    "business_info": {
+      "투자": "집행 (1.6년 전)719억+",
+      "펀드": "(1.6년 전)8개최근 2년 1개",
+      "employee_count": "8명"
+    },
+    "team_info": {
+      "members": [
+        {
+          "name": "김남연",
+          "position": "공동대표이사",
+          "status": "재직 중대표",
+          "details": "재직 중대표 / 대표"
+        },
+        {
+          "name": "김성택",
+          "position": "공동대표이사",
+          "status": "재직 중대표",
+          "details": "재직 중대표 / 대표"
+        },
+        {
+          "name": "최민혁",
+          "position": "수석팀장",
+          "status": "재직 중",
+          "details": ""
+        },
+        {
+          "name": "장원준",
+          "position": "팀장",
+          "status": "재직 중",
+          "details": ""
+        }
+      ]
+    },
+    "patents": {
+      "count": 0,
+      "details": []
+    },
+    "related_keywords": [
+      "벤처",
+      "자금",
+      "조합",
+      "중소기업",
+      "투자"
+    ]
+  }
+}
